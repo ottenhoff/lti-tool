@@ -67,6 +67,7 @@ npx drizzle-kit migrate
   - `connectionLimit`: Max connections (auto: 1 for serverless, 10 for servers)
   - `queueLimit`: Max queued requests (default: 0 = unlimited)
 - **nonceExpirationSeconds** (optional): Nonce TTL in seconds (default: 600)
+- **sessionExpirationSeconds** (optional): Session TTL in seconds (default: 86400)
 
 - **logger** (optional): Pino logger for debugging
 

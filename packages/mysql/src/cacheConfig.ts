@@ -8,12 +8,12 @@ export const LAUNCH_CONFIG_CACHE = new LRUCache<
   max: 1000,
   ttl: 1000 * 60 * 15, // 15 minutes
 });
+export const SESSION_CACHE_TTL_MS = 1000 * 60 * 5; // session cache lives at most five minutes
 export const SESSION_CACHE = new LRUCache<string, LTISession | undefinedSession>({
   max: 1000,
-  ttl: 1000 * 60 * 5, // 5 minutes (shorter than clients)
+  ttl: SESSION_CACHE_TTL_MS,
 });
 
-export const SESSION_TTL = 60 * 60 * 24; // session ttl is one day
 export const NONCE_TTL = 60 * 15; // nonce ttl is fifteen minutes
 
 // we need an undefined value to handle cache misses and cache them

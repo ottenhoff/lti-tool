@@ -67,6 +67,7 @@ npx drizzle-kit migrate
   - `max`: Max connections (auto: 1 for serverless, 10 for servers)
   - `idleTimeout`: Idle timeout in seconds before connection is closed (default: 20)
 - **nonceExpirationSeconds** (optional): Nonce TTL in seconds (default: 600)
+- **sessionExpirationSeconds** (optional): Session TTL in seconds (default: 86400)
 
 - **logger** (optional): Pino logger for debugging
 

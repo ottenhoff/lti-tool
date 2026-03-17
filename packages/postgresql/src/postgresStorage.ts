@@ -15,12 +15,14 @@ import postgres from 'postgres';
 import {
   LAUNCH_CONFIG_CACHE,
   SESSION_CACHE,
-  SESSION_TTL,
+  SESSION_CACHE_TTL_MS,
   undefinedLaunchConfigValue,
   undefinedSessionValue,
 } from './cacheConfig.js';
 import * as schema from './db/schema/index.js';
 import type { PostgresStorageConfig } from './interfaces/postgresStorageConfig.js';
+
+const DEFAULT_SESSION_EXPIRATION_SECONDS = 60 * 60 * 24;
 
 /**
  * PostgreSQL implementation of LTI storage interface.
@@ -33,6 +35,7 @@ export class PostgresStorage implements LTIStorage {
   private db: PostgresJsDatabase<typeof schema>;
   private sql: postgres.Sql;
   private nonceExpirationSeconds: number;
+  private sessionExpirationSeconds: number;
 
   constructor(config: PostgresStorageConfig) {
     this.logger =
@@ -45,6 +48,8 @@ export class PostgresStorage implements LTIStorage {
       } as unknown as Logger);
 
     this.nonceExpirationSeconds = config.nonceExpirationSeconds ?? 600;
+    this.sessionExpirationSeconds =
+      config.sessionExpirationSeconds ?? DEFAULT_SESSION_EXPIRATION_SECONDS;
 
     // Smart connection limit defaults
     const isServerless = isServerlessEnvironment();
@@ -76,6 +81,20 @@ export class PostgresStorage implements LTIStorage {
       },
       'PostgreSQL connection pool initialized',
     );
+  }
+
+  private cacheSession(session: LTISession, expiresAt: Date): void {
+    const ttl = Math.max(
+      0,
+      Math.min(SESSION_CACHE_TTL_MS, expiresAt.getTime() - Date.now()),
+    );
+
+    if (ttl <= 0) {
+      SESSION_CACHE.delete(session.id);
+      return;
+    }
+
+    SESSION_CACHE.set(session.id, session, { ttl });
   }
 
   async listClients(): Promise<Omit<LTIClient, 'deployments'>[]> {
@@ -428,14 +447,14 @@ export class PostgresStorage implements LTIStorage {
       ...sessionRecord.data,
     };
 
-    SESSION_CACHE.set(sessionId, session);
+    this.cacheSession(session, sessionRecord.expiresAt);
     return session;
   }
 
   async addSession(session: LTISession): Promise<string> {
     this.logger.debug({ sessionId: session.id }, 'adding session');
 
-    const expiresAt = new Date(Date.now() + SESSION_TTL * 1000);
+    const expiresAt = new Date(Date.now() + this.sessionExpirationSeconds * 1000);
     const { id, ...data } = session;
 
     await this.db.insert(schema.sessionsTable).values({
@@ -445,7 +464,7 @@ export class PostgresStorage implements LTIStorage {
     });
 
     // Cache the session
-    SESSION_CACHE.set(session.id, session);
+    this.cacheSession(session, expiresAt);
     this.logger.debug({ sessionId: session.id }, 'session added');
     return session.id;
   }

@@ -24,7 +24,7 @@ import type { Logger } from 'pino';
 import {
   LAUNCH_CONFIG_CACHE,
   SESSION_CACHE,
-  SESSION_TTL,
+  SESSION_CACHE_TTL_MS,
   undefinedLaunchConfigValue,
   undefinedSessionValue,
 } from './cacheConfig.js';
@@ -32,6 +32,8 @@ import type { DynamoBase } from './interfaces/dynamoBase.js';
 import type { DynamoDbStorageConfig } from './interfaces/dynamoDbStorageConfig.js';
 import type { DynamoLTIClient } from './interfaces/dynamoLTIClient.js';
 import type { DynamoLTIDeployment } from './interfaces/dynamoLTIDeployment.js';
+
+const DEFAULT_SESSION_EXPIRATION_SECONDS = 60 * 60 * 24;
 
 /**
  * DynamoDB implementation of LTI storage interface.
@@ -46,6 +48,7 @@ export class DynamoDbStorage implements LTIStorage {
   private launchConfigTable: string;
   private ddbClient: DynamoDBClient;
   private nonceExpirationSeconds: number;
+  private sessionExpirationSeconds: number;
 
   /**
    * Creates a new DynamoDB storage instance.
@@ -65,7 +68,23 @@ export class DynamoDbStorage implements LTIStorage {
     this.dataPlaneTable = config.dataPlaneTable;
     this.launchConfigTable = config.launchConfigTable;
     this.nonceExpirationSeconds = config.nonceExpirationSeconds ?? 600;
+    this.sessionExpirationSeconds =
+      config.sessionExpirationSeconds ?? DEFAULT_SESSION_EXPIRATION_SECONDS;
     this.ddbClient = new DynamoDBClient();
+  }
+
+  private cacheSession(session: LTISession, expiresAtEpochSeconds: number): void {
+    const ttl = Math.max(
+      0,
+      Math.min(SESSION_CACHE_TTL_MS, expiresAtEpochSeconds * 1000 - Date.now()),
+    );
+
+    if (ttl <= 0) {
+      SESSION_CACHE.delete(session.id);
+      return;
+    }
+
+    SESSION_CACHE.set(session.id, session, { ttl });
   }
 
   async listClients(): Promise<Omit<LTIClient, 'deployments'>[]> {
@@ -493,14 +512,27 @@ export class DynamoDbStorage implements LTIStorage {
       return undefined;
     }
 
-    const session = unmarshall(result.Item) as LTISession;
-    SESSION_CACHE.set(sessionId, session);
-    return session;
+    const sessionRecord = unmarshall(result.Item) as LTISession & { ttl?: number };
+    if (
+      sessionRecord.ttl !== undefined &&
+      sessionRecord.ttl <= Math.floor(Date.now() / 1000)
+    ) {
+      this.logger.warn({ sessionId }, 'session expired');
+      SESSION_CACHE.set(sessionId, undefinedSessionValue);
+      return undefined;
+    }
+
+    const { ttl, ...session } = sessionRecord;
+    const storedSession = session as LTISession;
+    if (ttl !== undefined) {
+      this.cacheSession(storedSession, ttl);
+    }
+    return storedSession;
   }
 
   async addSession(session: LTISession): Promise<string> {
     this.logger.debug({ sessionId: session.id }, 'adding session');
-    const ttl = Math.floor(Date.now() / 1000) + SESSION_TTL;
+    const ttl = Math.floor(Date.now() / 1000) + this.sessionExpirationSeconds;
 
     const result = await this.ddbClient.send(
       new PutItemCommand({
@@ -520,7 +552,7 @@ export class DynamoDbStorage implements LTIStorage {
     this.logDynamoDbResult(result, 'add session');
 
     // Cache the session
-    SESSION_CACHE.set(session.id, session);
+    this.cacheSession(session, ttl);
     this.logger.debug({ sessionId: session.id }, 'session added');
     return session.id;
   }

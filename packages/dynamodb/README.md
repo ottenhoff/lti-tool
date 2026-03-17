@@ -53,8 +53,18 @@ const storage = new DynamoDbStorage({
   controlPlaneTable: 'lti-tool-control', // LMS configurations
   dataPlaneTable: 'lti-tool-data', // nonce and session storage, with ttl
   launchConfigTable: 'lti-tool-launch-config', // LMS client and deployment lookup for optimized critical launch path performance
+  sessionExpirationSeconds: 60 * 60 * 24, // optional, defaults to 24 hours
 });
 ```
+
+Available options:
+
+- `controlPlaneTable` (required): Table for client and deployment records
+- `dataPlaneTable` (required): Table for nonce and session records
+- `launchConfigTable` (required): Table for launch config lookups
+- `nonceExpirationSeconds` (optional): Nonce TTL in seconds (default: 600)
+- `sessionExpirationSeconds` (optional): Session TTL in seconds (default: 86400)
+- `logger` (optional): Pino logger for debugging
 
 ## Table Schema
 

@@ -9,7 +9,11 @@ import type { BaseLogger } from 'pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DynamoDbStorage } from '../src';
-import { LAUNCH_CONFIG_CACHE, SESSION_CACHE } from '../src/cacheConfig';
+import {
+  LAUNCH_CONFIG_CACHE,
+  SESSION_CACHE,
+  undefinedSessionValue,
+} from '../src/cacheConfig';
 
 vi.mock('@aws-sdk/client-dynamodb');
 
@@ -207,23 +211,45 @@ describe('DynamoDbStorage', () => {
     it('fetches from DynamoDB', async () => {
       mockSend.mockResolvedValue({
         $metadata: { httpStatusCode: 200 },
-        Item: marshall(mockSession),
+        Item: marshall({ ...mockSession, ttl: Math.floor(Date.now() / 1000) + 3600 }),
       });
 
       const result = await storage.getSession('session123');
 
       expect(result).toEqual(expect.objectContaining({ id: 'session123' }));
     });
+
+    it('returns undefined for expired DynamoDB sessions even before TTL cleanup runs', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(2_000_000);
+      mockSend.mockResolvedValue({
+        $metadata: { httpStatusCode: 200 },
+        Item: marshall({ ...mockSession, ttl: 1_000 }),
+      });
+
+      const result = await storage.getSession('session123');
+
+      expect(result).toBeUndefined();
+      expect(SESSION_CACHE.get('session123')).toBe(undefinedSessionValue);
+    });
   });
 
   describe('addSession', () => {
     it('stores session with TTL', async () => {
+      storage = new DynamoDbStorage({
+        controlPlaneTable: 'controlPlane',
+        dataPlaneTable: 'dataPlane',
+        launchConfigTable: 'launchConfigs',
+        sessionExpirationSeconds: 42,
+        // oxlint-disable no-explicit-anyq
+        logger: mockLogger as any,
+      });
       mockSend.mockResolvedValue({ $metadata: { httpStatusCode: 200 } });
 
       await storage.addSession(mockSession);
 
       expect(mockSend).toHaveBeenCalledOnce();
       expect(SESSION_CACHE.get('session123')).toEqual(mockSession);
+      expect(SESSION_CACHE.info('session123')?.ttl).toBeLessThanOrEqual(42_000);
     });
   });
 

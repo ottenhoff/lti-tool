@@ -28,4 +28,8 @@ export interface MySqlStorageConfig {
    * Nonce expiration time in seconds (defaults to 600 = 10 minutes)
    */
   nonceExpirationSeconds?: number;
+  /**
+   * Session expiration time in seconds (defaults to 86400 = 24 hours)
+   */
+  sessionExpirationSeconds?: number;
 }

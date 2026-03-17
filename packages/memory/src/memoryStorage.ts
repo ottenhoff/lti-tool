@@ -52,6 +52,27 @@ export class MemoryStorage implements LTIStorage {
       } as unknown as Logger);
   }
 
+  private createClientLookupKey(iss: string, clientId: string): string {
+    return `${iss}#${clientId}`;
+  }
+
+  private createDeploymentLookupKey(
+    iss: string,
+    clientId: string,
+    deploymentId: string,
+  ): string {
+    return `${iss}#${clientId}#${deploymentId}`;
+  }
+
+  private getClientOrThrow(clientId: string): LTIClient {
+    const client = this.clients.get(clientId);
+    if (!client) {
+      throw new Error(`Client not found: ${clientId}`);
+    }
+
+    return client;
+  }
+
   getDeploymentById(
     // oxlint-disable-next-line no-unused-vars
     clientId: string, // oxlint-disable no-unused-vars
@@ -80,7 +101,10 @@ export class MemoryStorage implements LTIStorage {
     this.clients.set(clientId, clientWithId);
 
     // store in lookup map
-    this.clientLookup.set(`${client.iss}#${client.clientId}`, clientId);
+    this.clientLookup.set(
+      this.createClientLookupKey(client.iss, client.clientId),
+      clientId,
+    );
 
     this.logger.debug({ clientCount: this.clients.size }, 'client list count updated');
 
@@ -92,8 +116,42 @@ export class MemoryStorage implements LTIStorage {
     clientId: string,
     client: Partial<Omit<LTIClient, 'id' | 'deployments'>>,
   ): Promise<void> {
-    // does nothing; in production we support updates
-    this.logger.warn({ clientId, client }, 'updateClient not implemented');
+    const existing = this.getClientOrThrow(clientId);
+    const updatedClient = { ...existing, ...client };
+
+    if (
+      existing.iss !== updatedClient.iss ||
+      existing.clientId !== updatedClient.clientId
+    ) {
+      this.clientLookup.delete(
+        this.createClientLookupKey(existing.iss, existing.clientId),
+      );
+      this.clientLookup.set(
+        this.createClientLookupKey(updatedClient.iss, updatedClient.clientId),
+        clientId,
+      );
+
+      for (const deployment of existing.deployments) {
+        this.deployments.delete(
+          this.createDeploymentLookupKey(
+            existing.iss,
+            existing.clientId,
+            deployment.deploymentId,
+          ),
+        );
+        this.deployments.set(
+          this.createDeploymentLookupKey(
+            updatedClient.iss,
+            updatedClient.clientId,
+            deployment.deploymentId,
+          ),
+          deployment,
+        );
+      }
+    }
+
+    this.clients.set(clientId, updatedClient);
+    this.logger.debug({ clientId, client }, 'client updated');
   }
 
   // oxlint-disable-next-line require-await
@@ -102,11 +160,16 @@ export class MemoryStorage implements LTIStorage {
     if (client) {
       // Clean up deployments
       for (const deployment of client.deployments) {
-        const compositeKey = `${client.iss}#${client.clientId}#${deployment.id}`;
-        this.deployments.delete(compositeKey);
+        this.deployments.delete(
+          this.createDeploymentLookupKey(
+            client.iss,
+            client.clientId,
+            deployment.deploymentId,
+          ),
+        );
       }
       // Clean up lookup
-      this.clientLookup.delete(`${client.iss}#${client.clientId}`);
+      this.clientLookup.delete(this.createClientLookupKey(client.iss, client.clientId));
     }
     this.clients.delete(clientId);
   }
@@ -128,8 +191,9 @@ export class MemoryStorage implements LTIStorage {
     const client = this.clients.get(clientId);
     if (!client) return undefined;
 
-    const compositeKey = `${client.iss}#${client.clientId}#${deploymentId}`;
-    return this.deployments.get(compositeKey);
+    return client.deployments.find(
+      (existingDeployment) => existingDeployment.id === deploymentId,
+    );
   }
 
   // oxlint-disable-next-line require-await
@@ -137,16 +201,17 @@ export class MemoryStorage implements LTIStorage {
     clientId: string,
     deployment: Omit<LTIDeployment, 'id'>,
   ): Promise<string> {
-    const client = this.clients.get(clientId);
-    if (!client) {
-      throw new Error(`Client not found: ${clientId}`);
-    }
+    const client = this.getClientOrThrow(clientId);
     const internalDeploymentId = crypto.randomUUID();
     const deploymentWithId = { ...deployment, id: internalDeploymentId };
     client.deployments.push(deploymentWithId);
 
     // use a composite key so we don't have collisions
-    const compositeKey = `${client.iss}#${client.clientId}#${deployment.deploymentId}`;
+    const compositeKey = this.createDeploymentLookupKey(
+      client.iss,
+      client.clientId,
+      deployment.deploymentId,
+    );
     this.deployments.set(compositeKey, deploymentWithId);
 
     return internalDeploymentId;
@@ -158,12 +223,68 @@ export class MemoryStorage implements LTIStorage {
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
   ): Promise<void> {
-    this.logger.warn({ deploymentId, deployment }, 'updateDeployment not implemented');
+    const client = this.getClientOrThrow(clientId);
+    const deploymentIndex = client.deployments.findIndex(
+      (existingDeployment) => existingDeployment.id === deploymentId,
+    );
+
+    if (deploymentIndex === -1) {
+      throw new Error(`Deployment not found: ${deploymentId}`);
+    }
+
+    const existingDeployment = client.deployments[deploymentIndex];
+    const updatedDeployment = {
+      ...existingDeployment,
+      ...deployment,
+      id: existingDeployment.id,
+    };
+
+    this.deployments.delete(
+      this.createDeploymentLookupKey(
+        client.iss,
+        client.clientId,
+        existingDeployment.deploymentId,
+      ),
+    );
+    this.deployments.set(
+      this.createDeploymentLookupKey(
+        client.iss,
+        client.clientId,
+        updatedDeployment.deploymentId,
+      ),
+      updatedDeployment,
+    );
+
+    client.deployments[deploymentIndex] = updatedDeployment;
+    this.logger.debug({ clientId, deploymentId, deployment }, 'deployment updated');
   }
 
   // oxlint-disable-next-line require-await
   async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
-    this.logger.warn({ clientId, deploymentId }, 'deleteDeployment not implemented');
+    const client = this.clients.get(clientId);
+    if (!client) {
+      this.logger.warn({ clientId, deploymentId }, 'deployment not found for deletion');
+      return;
+    }
+
+    const deploymentIndex = client.deployments.findIndex(
+      (existingDeployment) => existingDeployment.id === deploymentId,
+    );
+    if (deploymentIndex === -1) {
+      this.logger.warn({ clientId, deploymentId }, 'deployment not found for deletion');
+      return;
+    }
+
+    const [existingDeployment] = client.deployments.splice(deploymentIndex, 1);
+    this.deployments.delete(
+      this.createDeploymentLookupKey(
+        client.iss,
+        client.clientId,
+        existingDeployment.deploymentId,
+      ),
+    );
+
+    this.logger.debug({ clientId, deploymentId }, 'deployment deleted');
   }
 
   // oxlint-disable-next-line require-await
@@ -221,7 +342,9 @@ export class MemoryStorage implements LTIStorage {
   ): Promise<LTILaunchConfig | undefined> {
     this.logger.debug({ iss, clientId, deploymentId }, 'getting launch config');
 
-    const clientInternalId = this.clientLookup.get(`${iss}#${clientId}`);
+    const clientInternalId = this.clientLookup.get(
+      this.createClientLookupKey(iss, clientId),
+    );
 
     if (!clientInternalId) {
       this.logger.warn({ clientInternalId }, 'client not found in lookup');
