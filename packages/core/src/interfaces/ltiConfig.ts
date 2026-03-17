@@ -49,6 +49,8 @@ export interface LTIConfig {
     stateExpirationSeconds?: number;
     /** Nonce expiration time in seconds (defaults to 600 = 10 minutes) */
     nonceExpirationSeconds?: number;
+    /** Session expiration time in seconds (defaults to 86400 = 24 hours) */
+    sessionExpirationSeconds?: number;
   };
 
   /** Dynamic registration configuration for LTI 1.3 tool registration */

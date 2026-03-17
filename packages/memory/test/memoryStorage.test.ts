@@ -1,4 +1,4 @@
-import type { LTIClient, LTIDeployment } from '@lti-tool/core';
+import type { LTIClient, LTIDeployment, LTISession } from '@lti-tool/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MemoryStorage } from '../src/index.js';
@@ -16,6 +16,27 @@ const testDeployment: Omit<LTIDeployment, 'id'> = {
   deploymentId: 'deployment-1',
   name: 'Initial Deployment',
   description: 'Initial deployment configuration',
+};
+
+const testSession: LTISession = {
+  id: 'session-123',
+  jwtPayload: {},
+  user: { id: 'user-123', roles: [] },
+  context: { id: 'context-123', label: 'TEST', title: 'Test Course' },
+  platform: {
+    issuer: testClient.iss,
+    clientId: testClient.clientId,
+    deploymentId: testDeployment.deploymentId,
+    name: testClient.name,
+  },
+  launch: { target: 'https://tool.example.com/launch' },
+  customParameters: {},
+  isAdmin: false,
+  isInstructor: false,
+  isStudent: false,
+  isAssignmentAndGradesAvailable: false,
+  isDeepLinkingAvailable: false,
+  isNameAndRolesAvailable: false,
 };
 
 describe('MemoryStorage', () => {
@@ -133,5 +154,13 @@ describe('MemoryStorage', () => {
         testDeployment.deploymentId,
       ),
     ).toBeUndefined();
+  });
+
+  it('does not return expired sessions', async () => {
+    await storage.addSession(testSession, new Date(Date.now() - 1_000));
+
+    const session = await storage.getSession(testSession.id);
+
+    expect(session).toBeUndefined();
   });
 });

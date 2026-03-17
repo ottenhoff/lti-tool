@@ -29,6 +29,9 @@ const ltiTool = new LTITool({
   stateSecret: new TextEncoder().encode('your-secret-key'),
   keyPair, // Your RSA keypair
   storage: new MemoryStorage(),
+  security: {
+    sessionExpirationSeconds: 60 * 60 * 24, // optional, defaults to 24 hours
+  },
 });
 
 // Configure your LMS

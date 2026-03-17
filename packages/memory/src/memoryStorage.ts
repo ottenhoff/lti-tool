@@ -37,6 +37,7 @@ export class MemoryStorage implements LTIStorage {
   private clientLookup = new Map<string, string>(); // issuer#clientId -> internalClientId
 
   private sessions = new Map<string, LTISession>();
+  private sessionExpirations = new Map<string, Date>();
   private nonces = new Map<string, Date>(); // nonce -> expiration date
   private registrationSessions = new Map<string, LTIDynamicRegistrationSession>();
   private logger: Logger;
@@ -318,18 +319,28 @@ export class MemoryStorage implements LTIStorage {
   async getSession(sessionId: string): Promise<LTISession | undefined> {
     this.logger.debug({ sessionId }, 'getting session');
     const session = this.sessions.get(sessionId);
+    const expiresAt = this.sessionExpirations.get(sessionId);
 
     if (!session) {
       this.logger.warn({ sessionId }, 'session not found');
+      return undefined;
+    }
+
+    if (expiresAt && expiresAt < new Date()) {
+      this.logger.warn({ sessionId, expiresAt }, 'session expired');
+      this.sessions.delete(sessionId);
+      this.sessionExpirations.delete(sessionId);
+      return undefined;
     }
 
     return session;
   }
 
   // oxlint-disable-next-line require-await
-  async addSession(session: LTISession): Promise<string> {
+  async addSession(session: LTISession, expiresAt: Date): Promise<string> {
     this.logger.debug({ sessionId: session.id }, 'adding session');
     this.sessions.set(session.id, session);
+    this.sessionExpirations.set(session.id, expiresAt);
     this.logger.debug({ sessionCount: this.sessions.size }, 'session count');
     return session.id;
   }

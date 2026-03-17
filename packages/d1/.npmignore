@@ -1,0 +1,5 @@
+test/
+*.test.ts
+*.test.js
+coverage/
+.nyc_output/

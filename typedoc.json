@@ -4,6 +4,7 @@
     "packages/core",
     "packages/hono",
     "packages/memory",
+    "packages/d1",
     "packages/dynamodb",
     "packages/mysql",
     "packages/postgresql"

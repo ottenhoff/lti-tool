@@ -235,17 +235,10 @@ describe('DynamoDbStorage', () => {
 
   describe('addSession', () => {
     it('stores session with TTL', async () => {
-      storage = new DynamoDbStorage({
-        controlPlaneTable: 'controlPlane',
-        dataPlaneTable: 'dataPlane',
-        launchConfigTable: 'launchConfigs',
-        sessionExpirationSeconds: 42,
-        // oxlint-disable no-explicit-anyq
-        logger: mockLogger as any,
-      });
       mockSend.mockResolvedValue({ $metadata: { httpStatusCode: 200 } });
+      vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
 
-      await storage.addSession(mockSession);
+      await storage.addSession(mockSession, new Date(1_042_000));
 
       expect(mockSend).toHaveBeenCalledOnce();
       expect(SESSION_CACHE.get('session123')).toEqual(mockSession);

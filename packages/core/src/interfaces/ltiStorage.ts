@@ -115,9 +115,10 @@ export interface LTIStorage {
    * Stores a new user session after successful LTI launch.
    *
    * @param session - Complete session object with user, context, and service data
+   * @param expiresAt - When this session should be considered expired
    * @returns The session ID for reference
    */
-  addSession(session: LTISession): Promise<string>;
+  addSession(session: LTISession, expiresAt: Date): Promise<string>;
 
   // Nonce validation (prevent replay attacks)
 

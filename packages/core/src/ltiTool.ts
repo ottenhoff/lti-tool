@@ -42,6 +42,8 @@ import { TokenService } from './services/token.service.js';
 import { formatError } from './utils/errorFormatting.js';
 import { getValidLaunchConfig } from './utils/launchConfigValidation.js';
 
+const DEFAULT_SESSION_EXPIRATION_SECONDS = 60 * 60 * 24;
+
 /**
  * Main LTI 1.3 Tool implementation providing secure authentication, launch verification,
  * and LTI Advantage services integration.
@@ -280,7 +282,11 @@ export class LTITool {
   async createSession(lti13JwtPayload: LTI13JwtPayload): Promise<LTISession> {
     try {
       const session = createSession(lti13JwtPayload);
-      await this.config.storage.addSession(session);
+      const sessionExpirationSeconds =
+        this.config.security?.sessionExpirationSeconds ??
+        DEFAULT_SESSION_EXPIRATION_SECONDS;
+      const expiresAt = new Date(Date.now() + sessionExpirationSeconds * 1000);
+      await this.config.storage.addSession(session, expiresAt);
       return session;
     } catch (error) {
       throw new Error(

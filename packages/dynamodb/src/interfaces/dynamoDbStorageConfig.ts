@@ -7,6 +7,4 @@ export interface DynamoDbStorageConfig {
   launchConfigTable: string;
   /** Nonce expiration time in seconds (defaults to 600) */
   nonceExpirationSeconds?: number;
-  /** Session expiration time in seconds (defaults to 86400) */
-  sessionExpirationSeconds?: number;
 }

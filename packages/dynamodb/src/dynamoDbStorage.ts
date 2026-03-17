@@ -33,8 +33,6 @@ import type { DynamoDbStorageConfig } from './interfaces/dynamoDbStorageConfig.j
 import type { DynamoLTIClient } from './interfaces/dynamoLTIClient.js';
 import type { DynamoLTIDeployment } from './interfaces/dynamoLTIDeployment.js';
 
-const DEFAULT_SESSION_EXPIRATION_SECONDS = 60 * 60 * 24;
-
 /**
  * DynamoDB implementation of LTI storage interface.
  *
@@ -48,7 +46,6 @@ export class DynamoDbStorage implements LTIStorage {
   private launchConfigTable: string;
   private ddbClient: DynamoDBClient;
   private nonceExpirationSeconds: number;
-  private sessionExpirationSeconds: number;
 
   /**
    * Creates a new DynamoDB storage instance.
@@ -68,8 +65,6 @@ export class DynamoDbStorage implements LTIStorage {
     this.dataPlaneTable = config.dataPlaneTable;
     this.launchConfigTable = config.launchConfigTable;
     this.nonceExpirationSeconds = config.nonceExpirationSeconds ?? 600;
-    this.sessionExpirationSeconds =
-      config.sessionExpirationSeconds ?? DEFAULT_SESSION_EXPIRATION_SECONDS;
     this.ddbClient = new DynamoDBClient();
   }
 
@@ -530,9 +525,9 @@ export class DynamoDbStorage implements LTIStorage {
     return storedSession;
   }
 
-  async addSession(session: LTISession): Promise<string> {
+  async addSession(session: LTISession, expiresAt: Date): Promise<string> {
     this.logger.debug({ sessionId: session.id }, 'adding session');
-    const ttl = Math.floor(Date.now() / 1000) + this.sessionExpirationSeconds;
+    const ttl = Math.ceil(expiresAt.getTime() / 1000);
 
     const result = await this.ddbClient.send(
       new PutItemCommand({

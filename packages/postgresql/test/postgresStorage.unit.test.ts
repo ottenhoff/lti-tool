@@ -60,10 +60,9 @@ describe('PostgresStorage session expiration', () => {
     SESSION_CACHE.clear();
   });
 
-  it('uses sessionExpirationSeconds when storing sessions', async () => {
+  it('uses the provided session expiry when storing sessions', async () => {
     const storage = new PostgresStorage({
       connectionUrl: 'postgresql://user:password@localhost:5432/lti_test',
-      sessionExpirationSeconds: 42,
     });
     const insertValues = vi.fn(async (_values: unknown) => undefined);
 
@@ -75,7 +74,7 @@ describe('PostgresStorage session expiration', () => {
 
     vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
 
-    await storage.addSession(testSession);
+    await storage.addSession(testSession, new Date(1_042_000));
 
     expect(insertValues).toHaveBeenCalledWith(
       expect.objectContaining({

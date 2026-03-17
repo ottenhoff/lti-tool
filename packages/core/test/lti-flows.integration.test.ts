@@ -166,7 +166,29 @@ describe('LTI Integration Tests', () => {
       );
 
       // Verify session was stored
-      expect(mockStorage.addSession).toHaveBeenCalledWith(session);
+      expect(mockStorage.addSession).toHaveBeenCalledWith(session, expect.any(Date));
+    });
+
+    it('applies session expiration from core security config', async () => {
+      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+      const ltiPayload = createMockLTIPayload();
+
+      const customTool = new LTITool({
+        keyPair,
+        stateSecret,
+        storage: mockStorage,
+        security: {
+          keyId: 'test-key',
+          stateExpirationSeconds: 300,
+          nonceExpirationSeconds: 300,
+          sessionExpirationSeconds: 42,
+        },
+      });
+
+      const session = await customTool.createSession(ltiPayload as any);
+
+      expect(mockStorage.addSession).toHaveBeenCalledWith(session, new Date(1_042_000));
+      dateNowSpy.mockRestore();
     });
   });
 

@@ -132,7 +132,7 @@ describe('MySqlStorage - Deployment Operations', () => {
 
 describe('MySqlStorage - Session Operations', () => {
   it('should add and retrieve a session', async () => {
-    await storage.addSession(testSession);
+    await storage.addSession(testSession, new Date(Date.now() + 60_000));
 
     const retrieved = await storage.getSession(testSession.id);
     expect(retrieved?.user.id).toBe(testSession.user.id);
