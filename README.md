@@ -18,7 +18,7 @@ The first **serverless-native** LTI 1.3 library for Node.js. Built for modern cl
 **Key features**
 
 - **Serverless-first** - Optimized for AWS Lambda, Cloudflare Workers
-- **Pluggable storage** - DynamoDB, Memory, PostgreSQL, MySQL
+- **Pluggable storage** - Memory, DynamoDB, PostgreSQL, MySQL, Cloudflare D1
 - **Modern frameworks** - Hono (primary), Express/Fastify (planned)
 - **Security-focused** - JWT verification, nonce validation, replay attack prevention
 - **Performance** - 6.5ms average execution time, scales to zero
@@ -36,7 +36,6 @@ The first **serverless-native** LTI 1.3 library for Node.js. Built for modern cl
 ### Future Releases
 
 - **Examples Repository** - Comprehensive example implementations
-- **Storage Adapters** - Cloudflare D1
 - **Framework Support** - Express, Fastify, Astro, React, Angular
 
 ## Documentation
@@ -135,12 +134,15 @@ Optimized for serverless with impressive performance metrics
 
 ### Packages
 
-| Package                                     | Description                 | Use Case                   |
-| ------------------------------------------- | --------------------------- | -------------------------- |
-| [`@lti-tool/core`](./packages/core)         | Core LTI 1.3 implementation | Required for all setups    |
-| [`@lti-tool/hono`](./packages/hono)         | Hono framework integration  | Serverless APIs            |
-| [`@lti-tool/dynamodb`](./packages/dynamodb) | DynamoDB storage adapter    | Production AWS deployments |
-| [`@lti-tool/memory`](./packages/memory)     | In-memory storage adapter   | Development and testing    |
+| Package                                         | Description                   | Use Case                       |
+| ----------------------------------------------- | ----------------------------- | ------------------------------ |
+| [`@lti-tool/core`](./packages/core)             | Core LTI 1.3 implementation   | Required for all setups        |
+| [`@lti-tool/hono`](./packages/hono)             | Hono framework integration    | Serverless APIs                |
+| [`@lti-tool/memory`](./packages/memory)         | In-memory storage adapter     | Development and testing        |
+| [`@lti-tool/dynamodb`](./packages/dynamodb)     | DynamoDB storage adapter      | Production AWS deployments     |
+| [`@lti-tool/postgresql`](./packages/postgresql) | PostgreSQL storage adapter    | Production SQL deployments     |
+| [`@lti-tool/mysql`](./packages/mysql)           | MySQL storage adapter         | Production SQL deployments     |
+| [`@lti-tool/d1`](./packages/d1)                 | Cloudflare D1 storage adapter | Cloudflare Workers deployments |
 
 ### Storage Adapters
 
@@ -148,8 +150,9 @@ Pluggable storage system supports multiple backends
 
 - **Memory** - Development and testing
 - **DynamoDB** - Production AWS (with caching)
-- **PostgreSQL** - Coming soon
-- **MySQL** - Coming soon
+- **PostgreSQL** - Production SQL deployments
+- **MySQL** - Production SQL deployments
+- **Cloudflare D1** - Cloudflare Workers deployments
 - **Custom** - Implement the `LTIStorage` interface
 
 ### Framework Support
