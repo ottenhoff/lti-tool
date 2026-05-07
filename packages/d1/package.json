@@ -48,6 +48,7 @@
     }
   },
   "devDependencies": {
+    "miniflare": "^4.20260504.0",
     "pino": "^10.3.1"
   }
 }
