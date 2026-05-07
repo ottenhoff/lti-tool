@@ -185,15 +185,15 @@ export class D1Storage implements LTIStorage {
 
   async getDeployment(
     clientId: string,
-    deploymentId: string,
+    deploymentInternalId: string,
   ): Promise<LTIDeployment | undefined> {
-    this.logger.debug({ clientId, deploymentId }, 'getting deployment by id');
+    this.logger.debug({ clientId, deploymentInternalId }, 'getting deployment by id');
 
     const row = await this.database
       .prepare(
         'SELECT id, deployment_id, name, description, client_id FROM lti_tool_deployments WHERE client_id = ? AND id = ?',
       )
-      .bind(clientId, deploymentId)
+      .bind(clientId, deploymentInternalId)
       .first<DeploymentRow>();
 
     return row ? mapDeploymentRow(row) : undefined;
@@ -224,12 +224,15 @@ export class D1Storage implements LTIStorage {
 
   async updateDeployment(
     clientId: string,
-    deploymentId: string,
+    deploymentInternalId: string,
     deployment: Partial<LTIDeployment>,
   ): Promise<void> {
-    this.logger.info({ clientId, deploymentId, deployment }, 'updating deployment');
+    this.logger.info(
+      { clientId, deploymentInternalId, deployment },
+      'updating deployment',
+    );
 
-    const existing = await this.getDeployment(clientId, deploymentId);
+    const existing = await this.getDeployment(clientId, deploymentInternalId);
     if (!existing) throw new Error('Deployment not found');
 
     const updated = {
@@ -246,17 +249,17 @@ export class D1Storage implements LTIStorage {
         updated.name ?? null,
         updated.description ?? null,
         clientId,
-        deploymentId,
+        deploymentInternalId,
       )
       .run();
   }
 
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
-    this.logger.info({ clientId, deploymentId }, 'deleting deployment');
+  async deleteDeployment(clientId: string, deploymentInternalId: string): Promise<void> {
+    this.logger.info({ clientId, deploymentInternalId }, 'deleting deployment');
 
     await this.database
       .prepare('DELETE FROM lti_tool_deployments WHERE client_id = ? AND id = ?')
-      .bind(clientId, deploymentId)
+      .bind(clientId, deploymentInternalId)
       .run();
   }
 
@@ -319,18 +322,18 @@ export class D1Storage implements LTIStorage {
   async getLaunchConfig(
     iss: string,
     clientId: string,
-    deploymentId: string,
+    platformDeploymentId: string,
   ): Promise<LTILaunchConfig | undefined> {
-    this.logger.debug({ iss, clientId, deploymentId }, 'getting launch config');
+    this.logger.debug({ iss, clientId, platformDeploymentId }, 'getting launch config');
 
-    const row = await this.readLaunchConfigRow(iss, clientId, deploymentId);
+    const row = await this.readLaunchConfigRow(iss, clientId, platformDeploymentId);
     if (row) return row;
 
-    if (deploymentId !== 'default') {
+    if (platformDeploymentId !== 'default') {
       return this.getLaunchConfig(iss, clientId, 'default');
     }
 
-    this.logger.warn({ iss, clientId, deploymentId }, 'launch config not found');
+    this.logger.warn({ iss, clientId, platformDeploymentId }, 'launch config not found');
     return undefined;
   }
 
@@ -408,7 +411,7 @@ export class D1Storage implements LTIStorage {
   private async readLaunchConfigRow(
     iss: string,
     clientId: string,
-    deploymentId: string,
+    platformDeploymentId: string,
   ): Promise<LTILaunchConfig | undefined> {
     const row = await this.database
       .prepare(
@@ -427,7 +430,7 @@ export class D1Storage implements LTIStorage {
           AND deployments.deployment_id = ?
         LIMIT 1`,
       )
-      .bind(iss, clientId, deploymentId)
+      .bind(iss, clientId, platformDeploymentId)
       .first<{
         iss: string;
         client_id: string;
