@@ -17,22 +17,34 @@ npm run build
 
 # Run tests
 npm test
+```
 
-# Run MySQL adapter integration tests
+### Adapter Integration Tests
+
+The MySQL and PostgreSQL adapters use package-local Docker Compose files for local
+integration testing. Start the adapter database, apply its Drizzle migrations, run
+the adapter test file, and then tear the database down.
+
+```bash
+# MySQL
 docker compose -f packages/mysql/docker-compose.yml up -d --wait
 DATABASE_URL="mysql://lti_user:lti_password@127.0.0.1:3306/lti_test" npm exec --workspace=@lti-tool/mysql -- drizzle-kit migrate
 DATABASE_URL="mysql://lti_user:lti_password@127.0.0.1:3306/lti_test" npx vitest run packages/mysql/test/*.integration.test.ts
 docker compose -f packages/mysql/docker-compose.yml down -v
+```
 
-# Run PostgreSQL adapter integration tests
+```bash
+# PostgreSQL
 docker compose -f packages/postgresql/docker-compose.yml up -d --wait
 DATABASE_URL="postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test" npm exec --workspace=@lti-tool/postgresql -- drizzle-kit migrate
 DATABASE_URL="postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test" npx vitest run packages/postgresql/test/*.integration.test.ts
 docker compose -f packages/postgresql/docker-compose.yml down -v
+```
 
-# The Compose files publish 3306 and 5432 on the host.
-# Stop any local database using those ports, or update the published port and DATABASE_URL together.
+The Compose files publish `3306` and `5432` on the host. Stop any local database
+using those ports, or update the published port and `DATABASE_URL` together.
 
+```bash
 # Lint code
 npm run lint
 
