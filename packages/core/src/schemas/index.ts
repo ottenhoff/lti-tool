@@ -41,3 +41,11 @@ export {
   LTI13LoginSchema,
   parseLtiLoginInitiation,
 } from './lti13/lti13Login.schema.js';
+export {
+  MemberSchema,
+  NRPSContextMembershipResponseSchema,
+  NRPSContextResponseSchema,
+  NRPSMemberResponseSchema,
+  type Context,
+  type Member,
+} from './lti13/nrps/contextMembership.schema.js';

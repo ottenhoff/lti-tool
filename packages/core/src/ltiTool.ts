@@ -30,10 +30,7 @@ import { type Results, ResultsSchema } from './schemas/lti13/ags/result.schema.j
 import { type ScoreSubmission } from './schemas/lti13/ags/scoreSubmission.schema.js';
 import { type DeepLinkingContentItem } from './schemas/lti13/deepLinking/contentItem.schema.js';
 import { type OpenIDConfiguration } from './schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
-import {
-  type Member,
-  NRPSContextMembershipResponseSchema,
-} from './schemas/lti13/nrps/contextMembership.schema.js';
+import { type Member } from './schemas/lti13/nrps/contextMembership.schema.js';
 import {
   AGSService,
   type AGSGetScoresOptions,
@@ -47,6 +44,7 @@ import { createSession } from './services/session.service.js';
 import { TokenService } from './services/token.service.js';
 import { formatError } from './utils/errorFormatting.js';
 import { getValidLaunchConfig } from './utils/launchConfigValidation.js';
+import { normalizeLtiNrpsMembersResponse } from './utils/nrps.js';
 
 /**
  * Main LTI 1.3 Tool implementation providing secure authentication, launch verification,
@@ -612,21 +610,7 @@ export class LTITool {
     try {
       const response = await this.nrpsService.getMembers(session);
       const data = await response.json();
-      const validated = NRPSContextMembershipResponseSchema.parse(data);
-
-      // Transform to clean camelCase format
-      return validated.members.map((member) => ({
-        status: member.status,
-        name: member.name,
-        picture: member.picture,
-        givenName: member.given_name,
-        familyName: member.family_name,
-        middleName: member.middle_name,
-        email: member.email,
-        userId: member.user_id,
-        lisPersonSourcedId: member.lis_person_sourcedid,
-        roles: member.roles,
-      }));
+      return normalizeLtiNrpsMembersResponse(data);
     } catch (error) {
       throw new Error(
         `[NRPS] Members retrieval failed for session '${session.id}': ${formatError(error)}`,

@@ -20,4 +20,17 @@ export {
   type LtiRoleKind,
   type LtiSimplifiedRole,
 } from './utils/ltiRoles.js';
+export {
+  getLtiMemberDisplayName,
+  getLtiNrpsService,
+  hasLtiMemberRoleKind,
+  isLtiMemberAdministrator,
+  isLtiMemberContentDeveloper,
+  isLtiMemberInstructor,
+  isLtiMemberLearner,
+  isLtiNrpsAvailable,
+  normalizeLtiNrpsMembersResponse,
+  partitionLtiMembersByRoleKind,
+  type LtiNrpsService,
+} from './utils/nrps.js';
 export { LTITool } from './ltiTool.js';
