@@ -46,4 +46,10 @@ export {
   type ResolvedLtiLaunchMessage,
   type ResolvedLtiResourceLinkLaunchMessage,
 } from './utils/ltiLaunchMessage.js';
+export {
+  LtiLaunchVerificationError,
+  type LtiLaunchVerificationErrorCode,
+  type LtiLaunchVerificationResult,
+  type LtiVerifiedLaunch,
+} from './utils/ltiLaunchVerification.js';
 export { LTITool } from './ltiTool.js';

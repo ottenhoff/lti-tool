@@ -13,6 +13,7 @@ import {
   LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
   LTI_VERSION_1P3P0,
 } from '../src/constants.js';
+import { LtiLaunchVerificationError } from '../src/index.js';
 import type { LTIConfig, LTIStorage } from '../src/interfaces/index.js';
 import { LTITool } from '../src/ltiTool.js';
 
@@ -298,6 +299,44 @@ describe('LTI Integration Tests', () => {
       expect(session.isInstructor).toBe(false);
       expect(session.context.label).toBe('CS101');
       expect(session.resourceLink?.title).toBe('Lab 1');
+    });
+
+    it('returns structured launch verification details', async () => {
+      const ltiPayload = createMockLTIPayload({
+        nonce: 'test-nonce',
+      });
+      const { SignJWT } = await import('jose');
+      const jwt = await new SignJWT(ltiPayload)
+        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
+        .sign(platformKeyPair.privateKey);
+      const stateJwt = await new SignJWT({
+        nonce: 'test-nonce',
+        iss: 'https://platform.example.com',
+        client_id: 'client123',
+        target_link_uri: 'https://tool.example.com/content',
+        exp: Math.floor(Date.now() / 1000) + 300,
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .sign(stateSecret);
+
+      const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt);
+
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error('Expected launch verification success');
+      expect(result.launch.payload).toEqual(ltiPayload);
+      expect(result.launch.issuer).toBe('https://platform.example.com');
+      expect(result.launch.clientId).toBe('client123');
+      expect(result.launch.deploymentId).toBe('deployment1');
+      expect(result.launch.targetLinkUri).toBe('https://tool.example.com/content');
+    });
+
+    it('returns structured launch verification errors', async () => {
+      const result = await ltiTool.verifyLaunchDetailed('', '');
+
+      expect(result.success).toBe(false);
+      if (result.success) throw new Error('Expected launch verification failure');
+      expect(result.error).toBeInstanceOf(LtiLaunchVerificationError);
+      expect(result.error.code).toBe('invalid_launch_parameters');
     });
 
     it('successfully verifies LTI launch JWT with array audience', async () => {
