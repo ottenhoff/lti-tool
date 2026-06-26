@@ -33,4 +33,9 @@ export {
   partitionLtiMembersByRoleKind,
   type LtiNrpsService,
 } from './utils/nrps.js';
+export {
+  createLtiPostMessageStorageRedirect,
+  renderLtiPostMessageStorageRedirectPage,
+  type LtiPostMessageStorageRedirect,
+} from './utils/ltiPostMessageStorage.js';
 export { LTITool } from './ltiTool.js';
