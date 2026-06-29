@@ -106,6 +106,28 @@ describe('LTI Integration Tests', () => {
     mockCreateRemoteJWKSet.mockReturnValue((() => platformKeyPair.publicKey) as any);
   });
 
+  async function signLaunchAndState(
+    ltiPayload: Partial<Record<string, unknown>>,
+    stateOverrides: Record<string, unknown> = {},
+  ): Promise<{ jwt: string; stateJwt: string }> {
+    const { SignJWT } = await import('jose');
+    const jwt = await new SignJWT(ltiPayload)
+      .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
+      .sign(platformKeyPair.privateKey);
+    const stateJwt = await new SignJWT({
+      nonce: 'test-nonce',
+      iss: 'https://platform.example.com',
+      client_id: 'client123',
+      target_link_uri: 'https://tool.example.com/content',
+      exp: Math.floor(Date.now() / 1000) + 300,
+      ...stateOverrides,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .sign(stateSecret);
+
+    return { jwt, stateJwt };
+  }
+
   describe('Login Flow', () => {
     it('generates valid login URL with state and nonce', async () => {
       const loginParams = {
@@ -268,24 +290,7 @@ describe('LTI Integration Tests', () => {
         },
       });
 
-      // Sign the JWT with the platform's private key
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-
-      // Create a state JWT (simulating what handleLogin would create)
-      const statePayload = {
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      };
-
-      const stateJwt = await new SignJWT(statePayload)
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       // Verify the launch JWT
       const validatedPayload = await ltiTool.verifyLaunch(jwt, stateJwt);
@@ -305,19 +310,7 @@ describe('LTI Integration Tests', () => {
       const ltiPayload = createMockLTIPayload({
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt);
 
@@ -331,23 +324,23 @@ describe('LTI Integration Tests', () => {
     });
 
     it('creates sessions directly from verified multi-audience launches', async () => {
+      ltiTool = new LTITool({
+        keyPair,
+        stateSecret,
+        storage: mockStorage,
+        security: {
+          keyId: 'test-key',
+          stateExpirationSeconds: 300,
+          nonceExpirationSeconds: 300,
+          trustedAudiences: ['other-client'],
+        },
+      });
+
       const ltiPayload = createMockLTIPayload({
         aud: ['other-client', 'client123'],
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt);
 
