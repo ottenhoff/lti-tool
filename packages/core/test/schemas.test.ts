@@ -17,6 +17,7 @@ import {
   LTI_CLAIM_TOOL_CONFIGURATION,
   LTI_CLAIM_TOOL_PLATFORM,
   LTI_CLAIM_VERSION,
+  LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
   LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
   LTI_VERSION_1P3P0,
 } from '../src/index.js';
@@ -440,8 +441,8 @@ describe('Schema Validation Tests', () => {
       expect(() => LTI13JwtPayloadSchema.parse(invalidPayload)).toThrow();
     });
 
-    it('rejects payload missing required user fields', () => {
-      const invalidPayload = {
+    it('accepts payload missing optional privacy fields', () => {
+      const validPayload = {
         iss: 'https://platform.example.com',
         sub: 'user123',
         aud: 'client123',
@@ -455,7 +456,28 @@ describe('Schema Validation Tests', () => {
         [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
       };
 
-      expect(() => LTI13JwtPayloadSchema.parse(invalidPayload)).toThrow();
+      expect(() => LTI13JwtPayloadSchema.parse(validPayload)).not.toThrow();
+    });
+
+    it('accepts Deep Linking settings without presentation document targets', () => {
+      const validPayload = {
+        iss: 'https://platform.example.com',
+        sub: 'user123',
+        aud: 'client123',
+        exp: Math.floor(Date.now() / 1000) + 300,
+        iat: Math.floor(Date.now() / 1000),
+        nonce: 'test-nonce',
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+        [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
+        [LTI_CLAIM_DEEP_LINKING_SETTINGS]: {
+          deep_link_return_url: 'https://platform.example.com/deep_links',
+          accept_types: ['ltiResourceLink'],
+        },
+      };
+
+      expect(() => LTI13JwtPayloadSchema.parse(validPayload)).not.toThrow();
     });
   });
 

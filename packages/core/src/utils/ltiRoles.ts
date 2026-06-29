@@ -16,9 +16,11 @@ export type LtiSimplifiedRole =
 const ROLE_KIND_BY_NAME = {
   Administrator: 'administrator',
   ContentDeveloper: 'content-developer',
+  Faculty: 'instructor',
   Instructor: 'instructor',
   Learner: 'learner',
   Member: 'member',
+  Student: 'learner',
   TeachingAssistant: 'instructor',
 } as const satisfies Record<string, LtiRoleKind>;
 

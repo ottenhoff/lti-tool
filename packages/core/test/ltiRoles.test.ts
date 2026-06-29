@@ -25,7 +25,15 @@ describe('LTI role helpers', () => {
   it('classifies common context and institution roles', () => {
     expect(classifyLtiRole(LTI_ROLE_CONTEXT_INSTRUCTOR)).toBe('instructor');
     expect(classifyLtiRole(LTI_ROLE_CONTEXT_TEACHING_ASSISTANT)).toBe('instructor');
+    expect(
+      classifyLtiRole(
+        'http://purl.imsglobal.org/vocab/lis/v2/institution/person#Faculty',
+      ),
+    ).toBe('instructor');
     expect(classifyLtiRole(LTI_ROLE_CONTEXT_LEARNER)).toBe('learner');
+    expect(
+      classifyLtiRole('http://purl.imsglobal.org/vocab/lis/v2/membership#Student'),
+    ).toBe('learner');
     expect(classifyLtiRole(LTI_ROLE_INSTITUTION_ADMINISTRATOR)).toBe('administrator');
     expect(classifyLtiRole('http://example.com/custom#Observer')).toBe('unknown');
   });

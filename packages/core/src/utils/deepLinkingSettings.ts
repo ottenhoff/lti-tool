@@ -19,7 +19,8 @@ export function parseLtiDeepLinkingSettings(
   return {
     returnUrl: settings.deep_link_return_url,
     acceptTypes: settings.accept_types,
-    acceptPresentationDocumentTargets: settings.accept_presentation_document_targets,
+    acceptPresentationDocumentTargets:
+      settings.accept_presentation_document_targets ?? [],
     ...(settings.accept_media_types === undefined
       ? {}
       : { acceptMediaTypes: settings.accept_media_types }),
