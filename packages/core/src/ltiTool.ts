@@ -1,6 +1,7 @@
 import { createRemoteJWKSet, decodeJwt, exportJWK, jwtVerify, SignJWT } from 'jose';
 import type { Logger } from 'pino';
 
+import { LTI_CLAIM_DEPLOYMENT_ID, LTI_CLAIM_TARGET_LINK_URI } from './constants.js';
 import type { JWKS } from './interfaces/jwks.js';
 import type { LTIClient } from './interfaces/ltiClient.js';
 import type { LTIConfig } from './interfaces/ltiConfig.js';
@@ -29,10 +30,7 @@ import { type Results, ResultsSchema } from './schemas/lti13/ags/result.schema.j
 import { type ScoreSubmission } from './schemas/lti13/ags/scoreSubmission.schema.js';
 import { type DeepLinkingContentItem } from './schemas/lti13/deepLinking/contentItem.schema.js';
 import { type OpenIDConfiguration } from './schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
-import {
-  type Member,
-  NRPSContextMembershipResponseSchema,
-} from './schemas/lti13/nrps/contextMembership.schema.js';
+import { type Member } from './schemas/lti13/nrps/contextMembership.schema.js';
 import {
   AGSService,
   type AGSGetScoresOptions,
@@ -46,6 +44,12 @@ import { createSession } from './services/session.service.js';
 import { TokenService } from './services/token.service.js';
 import { formatError } from './utils/errorFormatting.js';
 import { getValidLaunchConfig } from './utils/launchConfigValidation.js';
+import {
+  LtiLaunchVerificationError,
+  type LtiLaunchVerificationResult,
+  type LtiVerifiedLaunch,
+} from './utils/ltiLaunchVerification.js';
+import { normalizeLtiNrpsMembersResponse } from './utils/nrps.js';
 
 /**
  * Main LTI 1.3 Tool implementation providing secure authentication, launch verification,
@@ -198,71 +202,103 @@ export class LTITool {
    */
   async verifyLaunch(idToken: string, state: string): Promise<LTI13JwtPayload> {
     try {
-      const validatedParams = VerifyLaunchParamsSchema.parse({ idToken, state });
-
-      // 1. UNVERIFIED - get issuer
-      const unverified = decodeJwt(validatedParams.idToken);
-      if (!unverified.iss) {
-        throw new Error('No issuer in token');
-      }
-
-      const deploymentId = getDeploymentId(unverified);
-
-      // 2. Verify our state JWT before binding this launch to a client configuration.
-      const stateData = await this.verifyLaunchState(validatedParams.state);
-      if (stateData.iss !== unverified.iss) {
-        throw new Error('Issuer mismatch');
-      }
-
-      // 3. Get the launchConfig so we can get the remote JWKS from our data store.
-      const launchConfig = await getValidLaunchConfig(
-        this.config.storage,
-        unverified.iss,
-        stateData.clientId,
-        deploymentId,
-      );
-
-      // 4. Verify LMS JWT
-      const payload = await this.verifyLaunchJwtWithCachedJwks(
-        validatedParams.idToken,
-        launchConfig.jwksUrl,
-        launchConfig.clientId,
-      );
-
-      // 5. Parse and validate LMS JWT
-      const validated = LTI13JwtPayloadSchema.parse(payload);
-
-      // 6. Verify client id is listed in the audience claim
-      if (!audienceIncludesClientId(validated.aud, launchConfig.clientId)) {
-        throw new Error(
-          `Invalid client_id: expected ${launchConfig.clientId}, got ${formatAudience(validated.aud)}`,
-        );
-      }
-      validateTrustedAudiences(
-        validated.aud,
-        launchConfig.clientId,
-        this.config.security?.trustedAudiences,
-      );
-      this.verifiedLaunchClientIds.set(validated, launchConfig.clientId);
-
-      // 7. Verify the launch target is the same target requested during login.
-      validateTargetLinkUri(validated, stateData.targetLinkUri);
-
-      // 8. Verify nonce matches
-      if (stateData.nonce !== validated.nonce) {
-        throw new Error('Nonce mismatch');
-      }
-
-      // 9. Check nonce hasn't been used before (prevent replay attacks)
-      const isValidNonce = await this.config.storage.validateNonce(validated.nonce);
-      if (!isValidNonce) {
-        throw new Error('Nonce has already been used or expired');
-      }
-
-      return validated;
+      const verifiedLaunch = await this.verifyLaunchInternal(idToken, state);
+      return verifiedLaunch.payload;
     } catch (error) {
       throw new Error(`[LTI] Launch verification failed: ${formatError(error)}`);
     }
+  }
+
+  /**
+   * Verifies an LTI 1.3 launch and returns structured success or failure details.
+   *
+   * This method performs the same security checks as verifyLaunch, but callers receive
+   * a stable error code and verified launch context instead of a thrown generic Error.
+   */
+  async verifyLaunchDetailed(
+    idToken: string,
+    state: string,
+  ): Promise<LtiLaunchVerificationResult> {
+    try {
+      const launch = await this.verifyLaunchInternal(idToken, state);
+      return { success: true, launch };
+    } catch (error) {
+      if (error instanceof LtiLaunchVerificationError) {
+        return { success: false, error };
+      }
+
+      return {
+        success: false,
+        error: new LtiLaunchVerificationError(
+          'unknown_error',
+          `Launch verification failed: ${formatError(error)}`,
+          error,
+        ),
+      };
+    }
+  }
+
+  // oxlint-disable-next-line max-lines-per-function complexity -- ordered security checks
+  private async verifyLaunchInternal(
+    idToken: string,
+    state: string,
+  ): Promise<LtiVerifiedLaunch> {
+    const validatedParams = verifyLaunchParams(idToken, state);
+    const unverified = decodeLaunchJwt(validatedParams.idToken);
+    const deploymentId = readLaunchDeploymentId(unverified);
+    const stateData = await this.readLaunchState(validatedParams.state);
+
+    if (stateData.iss !== unverified.iss) {
+      throw new LtiLaunchVerificationError('issuer_mismatch', 'Issuer mismatch');
+    }
+
+    const launchConfig = await this.readLaunchConfig(
+      unverified.iss,
+      stateData.clientId,
+      deploymentId,
+    );
+    const payload = await this.readVerifiedLaunchJwt(
+      validatedParams.idToken,
+      launchConfig.jwksUrl,
+      launchConfig.clientId,
+    );
+    const validated = parseVerifiedLaunchPayload(payload);
+
+    if (!audienceIncludesClientId(validated.aud, launchConfig.clientId)) {
+      throw new LtiLaunchVerificationError(
+        'invalid_audience',
+        `Invalid client_id: expected ${launchConfig.clientId}, got ${formatAudience(validated.aud)}`,
+      );
+    }
+    validateTrustedLaunchAudiences(
+      validated.aud,
+      launchConfig.clientId,
+      this.config.security?.trustedAudiences,
+    );
+    validateLaunchTargetLinkUri(validated, stateData.targetLinkUri);
+
+    if (stateData.nonce !== validated.nonce) {
+      throw new LtiLaunchVerificationError('nonce_mismatch', 'Nonce mismatch');
+    }
+
+    const isValidNonce = await this.config.storage.validateNonce(validated.nonce);
+    if (!isValidNonce) {
+      throw new LtiLaunchVerificationError(
+        'nonce_replay',
+        'Nonce has already been used or expired',
+      );
+    }
+
+    this.verifiedLaunchClientIds.set(validated, launchConfig.clientId);
+
+    return {
+      payload: validated,
+      issuer: unverified.iss,
+      clientId: launchConfig.clientId,
+      deploymentId,
+      targetLinkUri: stateData.targetLinkUri,
+      launchConfig,
+    };
   }
 
   private getOrCreateJwks(jwksUrl: string): ReturnType<typeof createRemoteJWKSet> {
@@ -300,6 +336,41 @@ export class LTITool {
     };
   }
 
+  private async readLaunchState(
+    state: string,
+  ): Promise<{ clientId: string; iss: string; nonce: string; targetLinkUri: string }> {
+    try {
+      return await this.verifyLaunchState(state);
+    } catch (error) {
+      throw new LtiLaunchVerificationError(
+        'state_verification_failed',
+        `State verification failed: ${formatError(error)}`,
+        error,
+      );
+    }
+  }
+
+  private async readLaunchConfig(
+    issuer: string,
+    clientId: string,
+    deploymentId: string,
+  ): Promise<LtiVerifiedLaunch['launchConfig']> {
+    try {
+      return await getValidLaunchConfig(
+        this.config.storage,
+        issuer,
+        clientId,
+        deploymentId,
+      );
+    } catch (error) {
+      throw new LtiLaunchVerificationError(
+        'launch_config_not_found',
+        `Launch config not found for issuer '${issuer}', client '${clientId}', deployment '${deploymentId}'`,
+        error,
+      );
+    }
+  }
+
   private async verifyLaunchJwtWithCachedJwks(
     idToken: string,
     jwksUrl: string,
@@ -320,6 +391,22 @@ export class LTITool {
       const refreshedJwks = this.getOrCreateJwks(jwksUrl);
       const { payload } = await jwtVerify(idToken, refreshedJwks, { audience });
       return payload as LTI13JwtPayload;
+    }
+  }
+
+  private async readVerifiedLaunchJwt(
+    idToken: string,
+    jwksUrl: string,
+    audience: string,
+  ): Promise<LTI13JwtPayload> {
+    try {
+      return await this.verifyLaunchJwtWithCachedJwks(idToken, jwksUrl, audience);
+    } catch (error) {
+      throw new LtiLaunchVerificationError(
+        'jwt_verification_failed',
+        `JWT verification failed: ${formatError(error)}`,
+        error,
+      );
     }
   }
 
@@ -611,21 +698,7 @@ export class LTITool {
     try {
       const response = await this.nrpsService.getMembers(session);
       const data = await response.json();
-      const validated = NRPSContextMembershipResponseSchema.parse(data);
-
-      // Transform to clean camelCase format
-      return validated.members.map((member) => ({
-        status: member.status,
-        name: member.name,
-        picture: member.picture,
-        givenName: member.given_name,
-        familyName: member.family_name,
-        middleName: member.middle_name,
-        email: member.email,
-        userId: member.user_id,
-        lisPersonSourcedId: member.lis_person_sourcedid,
-        roles: member.roles,
-      }));
+      return normalizeLtiNrpsMembersResponse(data);
     } catch (error) {
       throw new Error(
         `[NRPS] Members retrieval failed for session '${session.id}': ${formatError(error)}`,
@@ -1005,7 +1078,53 @@ function audienceIncludesClientId(
   return Array.isArray(audience) ? audience.includes(clientId) : audience === clientId;
 }
 
-function validateTrustedAudiences(
+function verifyLaunchParams(
+  idToken: string,
+  state: string,
+): { idToken: string; state: string } {
+  try {
+    return VerifyLaunchParamsSchema.parse({ idToken, state });
+  } catch (error) {
+    throw new LtiLaunchVerificationError(
+      'invalid_launch_parameters',
+      `Invalid launch parameters: ${formatError(error)}`,
+      error,
+    );
+  }
+}
+
+function decodeLaunchJwt(idToken: string): Record<string, unknown> & { iss: string } {
+  let decoded: Record<string, unknown>;
+  try {
+    decoded = decodeJwt(idToken);
+  } catch (error) {
+    throw new LtiLaunchVerificationError(
+      'jwt_decode_failed',
+      `JWT decode failed: ${formatError(error)}`,
+      error,
+    );
+  }
+
+  if (typeof decoded.iss !== 'string') {
+    throw new LtiLaunchVerificationError('missing_issuer', 'No issuer in token');
+  }
+
+  return { ...decoded, iss: decoded.iss };
+}
+
+function parseVerifiedLaunchPayload(payload: LTI13JwtPayload): LTI13JwtPayload {
+  try {
+    return LTI13JwtPayloadSchema.parse(payload);
+  } catch (error) {
+    throw new LtiLaunchVerificationError(
+      'invalid_payload',
+      `Invalid LTI launch payload: ${formatError(error)}`,
+      error,
+    );
+  }
+}
+
+function validateTrustedLaunchAudiences(
   audience: LTI13JwtPayload['aud'],
   clientId: string,
   trustedAudiences: string[] = [],
@@ -1018,20 +1137,23 @@ function validateTrustedAudiences(
   );
 
   if (untrustedAudiences.length > 0) {
-    throw new Error(`Untrusted audience(s): ${untrustedAudiences.join(', ')}`);
+    throw new LtiLaunchVerificationError(
+      'untrusted_audience',
+      `Untrusted audience(s): ${untrustedAudiences.join(', ')}`,
+    );
   }
 }
 
-function validateTargetLinkUri(
+function validateLaunchTargetLinkUri(
   payload: LTI13JwtPayload,
   expectedTargetLinkUri: string,
 ): void {
-  const targetLinkUri =
-    payload['https://purl.imsglobal.org/spec/lti/claim/target_link_uri'];
+  const targetLinkUri = payload[LTI_CLAIM_TARGET_LINK_URI];
   // LTI requires this to be the same value passed during login initiation.
   // Keep this as an exact string match; URL normalization can change routing semantics.
   if (targetLinkUri !== expectedTargetLinkUri) {
-    throw new Error(
+    throw new LtiLaunchVerificationError(
+      'target_link_uri_mismatch',
       `target_link_uri mismatch: expected ${expectedTargetLinkUri}, got ${targetLinkUri}`,
     );
   }
@@ -1041,11 +1163,14 @@ function formatAudience(audience: LTI13JwtPayload['aud']): string {
   return Array.isArray(audience) ? JSON.stringify(audience) : audience;
 }
 
-function getDeploymentId(payload: Record<string, unknown>): string {
-  const deploymentId = payload['https://purl.imsglobal.org/spec/lti/claim/deployment_id'];
+function readLaunchDeploymentId(payload: Record<string, unknown>): string {
+  const deploymentId = payload[LTI_CLAIM_DEPLOYMENT_ID];
   // The OIDC login parameter is optional, but the signed LTI message claim is required.
   if (typeof deploymentId !== 'string') {
-    throw new Error('No deployment_id in token');
+    throw new LtiLaunchVerificationError(
+      'missing_deployment_id',
+      'No deployment_id in token',
+    );
   }
 
   return deploymentId;

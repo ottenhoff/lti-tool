@@ -1,20 +1,108 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  LTI_CLAIM_AGS_ENDPOINT,
+  LTI_CLAIM_CONTEXT,
+  LTI_CLAIM_CUSTOM,
+  LTI_CLAIM_DEEP_LINKING_SETTINGS,
+  LTI_CLAIM_DEPLOYMENT_ID,
+  LTI_CLAIM_LAUNCH_PRESENTATION,
+  LTI_CLAIM_LIS,
+  LTI_CLAIM_MESSAGE_TYPE,
+  LTI_CLAIM_NRPS_NAMES_ROLE_SERVICE,
+  LTI_CLAIM_PLATFORM_CONFIGURATION,
+  LTI_CLAIM_RESOURCE_LINK,
+  LTI_CLAIM_ROLES,
+  LTI_CLAIM_TARGET_LINK_URI,
+  LTI_CLAIM_TOOL_CONFIGURATION,
+  LTI_CLAIM_TOOL_PLATFORM,
+  LTI_CLAIM_VERSION,
+  LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+  LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+  LTI_VERSION_1P3P0,
+} from '../src/index.js';
+import {
   DynamicRegistrationFormSchema,
   HandleLoginParamsSchema,
+  LTI13LoginInitiationSchema,
   LTI13JwtPayloadSchema,
   LTI13LaunchSchema,
   LTI13LoginSchema,
   SessionIdSchema,
   VerifyLaunchParamsSchema,
+  parseLtiLoginInitiation,
 } from '../src/schemas/index.js';
 import { LineItemSchema } from '../src/schemas/lti13/ags/lineItem.schema.js';
 import { ResultSchema } from '../src/schemas/lti13/ags/result.schema.js';
 import { ScoreSubmissionSchema } from '../src/schemas/lti13/ags/scoreSubmission.schema.js';
+import { CoreLtiClaimsSchema } from '../src/schemas/lti13/claims/coreLtiClaims.schema.js';
+import { openIDConfigurationSchema } from '../src/schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
+import { RegistrationResponseSchema } from '../src/schemas/lti13/dynamicRegistration/registrationResponse.schema.js';
+import { ToolRegistrationPayloadSchema } from '../src/schemas/lti13/dynamicRegistration/toolRegistrationPayload.schema.js';
 import { NRPSContextMembershipResponseSchema } from '../src/schemas/lti13/nrps/contextMembership.schema.js';
 
 describe('Schema Validation Tests', () => {
+  describe('LTI constants', () => {
+    it('uses exported LTI constants as schema property keys', () => {
+      expect(Object.keys(CoreLtiClaimsSchema.shape).sort()).toEqual(
+        [
+          LTI_CLAIM_DEPLOYMENT_ID,
+          LTI_CLAIM_MESSAGE_TYPE,
+          LTI_CLAIM_ROLES,
+          LTI_CLAIM_TARGET_LINK_URI,
+          LTI_CLAIM_VERSION,
+        ].sort(),
+      );
+
+      const extendedClaimKeys = [
+        LTI_CLAIM_RESOURCE_LINK,
+        LTI_CLAIM_CONTEXT,
+        LTI_CLAIM_TOOL_PLATFORM,
+        LTI_CLAIM_LIS,
+        LTI_CLAIM_LAUNCH_PRESENTATION,
+        LTI_CLAIM_CUSTOM,
+        LTI_CLAIM_AGS_ENDPOINT,
+        LTI_CLAIM_NRPS_NAMES_ROLE_SERVICE,
+        LTI_CLAIM_DEEP_LINKING_SETTINGS,
+      ];
+      for (const key of extendedClaimKeys) {
+        expect(LTI13JwtPayloadSchema.shape).toHaveProperty(key);
+      }
+
+      expect(openIDConfigurationSchema.shape).toHaveProperty(
+        LTI_CLAIM_PLATFORM_CONFIGURATION,
+      );
+      expect(ToolRegistrationPayloadSchema.shape).toHaveProperty(
+        LTI_CLAIM_TOOL_CONFIGURATION,
+      );
+      expect(RegistrationResponseSchema.shape).toHaveProperty(
+        LTI_CLAIM_TOOL_CONFIGURATION,
+      );
+    });
+
+    it('accepts exported claim constants as LTI payload property names', () => {
+      const validPayload = {
+        iss: 'https://platform.example.com',
+        sub: 'user123',
+        aud: 'client123',
+        exp: Math.floor(Date.now() / 1000) + 300,
+        iat: Math.floor(Date.now() / 1000),
+        nonce: 'test-nonce',
+        given_name: 'John',
+        family_name: 'Doe',
+        name: 'John Doe',
+        email: 'john.doe@university.edu',
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+        [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
+        [LTI_CLAIM_ROLES]: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+      };
+
+      expect(() => LTI13JwtPayloadSchema.parse(validPayload)).not.toThrow();
+    });
+  });
+
   describe('LTI13LoginSchema', () => {
     it('validates valid login parameters', () => {
       const validLogin = {
@@ -61,6 +149,71 @@ describe('Schema Validation Tests', () => {
       };
 
       expect(() => LTI13LoginSchema.parse(incompleteLogin)).toThrow();
+    });
+  });
+
+  describe('LTI13LoginInitiationSchema', () => {
+    it('accepts standard login initiation parameters with optional registration hints', () => {
+      const parsed = LTI13LoginInitiationSchema.parse({
+        iss: 'https://platform.example.com',
+        login_hint: 'user123',
+        target_link_uri: 'https://tool.example.com/content',
+        client_id: 'client123',
+        lti_deployment_id: 'deployment1',
+        lti_message_hint: 'hint123',
+        lti_storage_target: '_parent',
+      });
+
+      expect(parsed).toEqual({
+        iss: 'https://platform.example.com',
+        login_hint: 'user123',
+        target_link_uri: 'https://tool.example.com/content',
+        client_id: 'client123',
+        lti_deployment_id: 'deployment1',
+        lti_message_hint: 'hint123',
+        lti_storage_target: '_parent',
+      });
+    });
+
+    it('allows platforms to omit optional client, deployment, message, and storage hints', () => {
+      const parsed = parseLtiLoginInitiation({
+        iss: 'https://platform.example.com',
+        login_hint: 'user123',
+        target_link_uri: 'https://tool.example.com/content',
+      });
+
+      expect(parsed).toEqual({
+        iss: 'https://platform.example.com',
+        login_hint: 'user123',
+        target_link_uri: 'https://tool.example.com/content',
+      });
+    });
+
+    it('normalizes empty optional fields to undefined', () => {
+      const parsed = parseLtiLoginInitiation({
+        iss: 'https://platform.example.com',
+        login_hint: 'user123',
+        target_link_uri: 'https://tool.example.com/content',
+        client_id: '',
+        lti_deployment_id: '',
+        lti_message_hint: '',
+        lti_storage_target: '',
+      });
+
+      expect(parsed).toEqual({
+        iss: 'https://platform.example.com',
+        login_hint: 'user123',
+        target_link_uri: 'https://tool.example.com/content',
+      });
+    });
+
+    it('still rejects missing required launch initiation fields', () => {
+      expect(() =>
+        parseLtiLoginInitiation({
+          iss: 'https://platform.example.com',
+          target_link_uri: 'https://tool.example.com/content',
+        }),
+      ).toThrow();
     });
   });
 
@@ -206,21 +359,17 @@ describe('Schema Validation Tests', () => {
         family_name: 'Doe',
         name: 'John Doe',
         email: 'john.doe@university.edu',
-        'https://purl.imsglobal.org/spec/lti/claim/message_type':
-          'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': 'deployment1',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri':
-          'https://tool.example.com/content',
-        'https://purl.imsglobal.org/spec/lti/claim/roles': [
-          'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
-        ],
-        'https://purl.imsglobal.org/spec/lti/claim/context': {
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+        [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
+        [LTI_CLAIM_ROLES]: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+        [LTI_CLAIM_CONTEXT]: {
           id: 'course123',
           label: 'CS101',
           title: 'Introduction to Computer Science',
         },
-        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
+        [LTI_CLAIM_RESOURCE_LINK]: {
           id: 'assignment456',
           title: 'Lab 1',
         },
@@ -241,11 +390,10 @@ describe('Schema Validation Tests', () => {
         family_name: 'Doe',
         name: 'John Doe',
         email: 'john.doe@university.edu',
-        'https://purl.imsglobal.org/spec/lti/claim/message_type':
-          'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': 'deployment1',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': 'not-a-url',
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+        [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'not-a-url',
       };
 
       expect(() => LTI13JwtPayloadSchema.parse(invalidPayload)).toThrow();
@@ -263,11 +411,10 @@ describe('Schema Validation Tests', () => {
         family_name: 'Doe',
         name: 'John Doe',
         email: 'john.doe@university.edu',
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'InvalidMessageType',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': 'deployment1',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri':
-          'https://tool.example.com/content',
+        [LTI_CLAIM_MESSAGE_TYPE]: 'InvalidMessageType',
+        [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
       };
 
       expect(() => LTI13JwtPayloadSchema.parse(invalidPayload)).toThrow();
@@ -285,19 +432,17 @@ describe('Schema Validation Tests', () => {
         family_name: 'Doe',
         name: 'John Doe',
         email: 'john.doe@university.edu',
-        'https://purl.imsglobal.org/spec/lti/claim/message_type':
-          'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '2.0.0',
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': 'deployment1',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri':
-          'https://tool.example.com/content',
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+        [LTI_CLAIM_VERSION]: '2.0.0',
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
       };
 
       expect(() => LTI13JwtPayloadSchema.parse(invalidPayload)).toThrow();
     });
 
-    it('rejects payload missing required user fields', () => {
-      const invalidPayload = {
+    it('accepts payload missing optional privacy fields', () => {
+      const validPayload = {
         iss: 'https://platform.example.com',
         sub: 'user123',
         aud: 'client123',
@@ -305,15 +450,34 @@ describe('Schema Validation Tests', () => {
         iat: Math.floor(Date.now() / 1000),
         nonce: 'test-nonce',
         // missing given_name, family_name, name, email
-        'https://purl.imsglobal.org/spec/lti/claim/message_type':
-          'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': 'deployment1',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri':
-          'https://tool.example.com/content',
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+        [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
       };
 
-      expect(() => LTI13JwtPayloadSchema.parse(invalidPayload)).toThrow();
+      expect(() => LTI13JwtPayloadSchema.parse(validPayload)).not.toThrow();
+    });
+
+    it('accepts Deep Linking settings without presentation document targets', () => {
+      const validPayload = {
+        iss: 'https://platform.example.com',
+        sub: 'user123',
+        aud: 'client123',
+        exp: Math.floor(Date.now() / 1000) + 300,
+        iat: Math.floor(Date.now() / 1000),
+        nonce: 'test-nonce',
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+        [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+        [LTI_CLAIM_DEPLOYMENT_ID]: 'deployment1',
+        [LTI_CLAIM_TARGET_LINK_URI]: 'https://tool.example.com/content',
+        [LTI_CLAIM_DEEP_LINKING_SETTINGS]: {
+          deep_link_return_url: 'https://platform.example.com/deep_links',
+          accept_types: ['ltiResourceLink'],
+        },
+      };
+
+      expect(() => LTI13JwtPayloadSchema.parse(validPayload)).not.toThrow();
     });
   });
 

@@ -1,13 +1,24 @@
+import {
+  LTI_CLAIM_AGS_ENDPOINT,
+  LTI_CLAIM_CONTEXT,
+  LTI_CLAIM_CUSTOM,
+  LTI_CLAIM_DEEP_LINKING_SETTINGS,
+  LTI_CLAIM_DEPLOYMENT_ID,
+  LTI_CLAIM_NRPS_NAMES_ROLE_SERVICE,
+  LTI_CLAIM_RESOURCE_LINK,
+  LTI_CLAIM_ROLES,
+  LTI_CLAIM_TARGET_LINK_URI,
+  LTI_CLAIM_TOOL_PLATFORM,
+} from '../constants.js';
 import type { LTISession } from '../interfaces/ltiSession.js';
 import type { LTI13JwtPayload } from '../schemas/index.js';
-
-const ROLE_MAPPINGS: Record<string, string> = {
-  Instructor: 'instructor',
-  Learner: 'student',
-  Administrator: 'admin',
-  ContentDeveloper: 'content-developer',
-  Member: 'member',
-};
+import { parseLtiDeepLinkingSettings } from '../utils/deepLinkingSettings.js';
+import {
+  hasLtiAdministratorRole,
+  hasLtiInstructorRole,
+  hasLtiLearnerRole,
+  simplifyLtiRoles,
+} from '../utils/ltiRoles.js';
 
 /**
  * Creates an LTI session object from a validated LTI 1.3 JWT payload.
@@ -22,24 +33,19 @@ export function createSession(
   lti13JwtPayload: LTI13JwtPayload,
   options: { clientId?: string } = {},
 ): LTISession {
-  const roles = lti13JwtPayload['https://purl.imsglobal.org/spec/lti/claim/roles'] || [];
-  const context = lti13JwtPayload['https://purl.imsglobal.org/spec/lti/claim/context'];
-  const platform =
-    lti13JwtPayload['https://purl.imsglobal.org/spec/lti/claim/tool_platform'];
-  const resourceLink =
-    lti13JwtPayload['https://purl.imsglobal.org/spec/lti/claim/resource_link'];
-  const customClaims =
-    lti13JwtPayload['https://purl.imsglobal.org/spec/lti/claim/custom'] || {};
-  const agsEndpoint =
-    lti13JwtPayload['https://purl.imsglobal.org/spec/lti-ags/claim/endpoint'];
-  const nrpsService =
-    lti13JwtPayload['https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice'];
-  const deepLinkingSettings =
-    lti13JwtPayload['https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings'];
+  const roles = lti13JwtPayload[LTI_CLAIM_ROLES] || [];
+  const context = lti13JwtPayload[LTI_CLAIM_CONTEXT];
+  const platform = lti13JwtPayload[LTI_CLAIM_TOOL_PLATFORM];
+  const resourceLink = lti13JwtPayload[LTI_CLAIM_RESOURCE_LINK];
+  const customClaims = lti13JwtPayload[LTI_CLAIM_CUSTOM] || {};
+  const agsEndpoint = lti13JwtPayload[LTI_CLAIM_AGS_ENDPOINT];
+  const nrpsService = lti13JwtPayload[LTI_CLAIM_NRPS_NAMES_ROLE_SERVICE];
+  const deepLinkingSettings = lti13JwtPayload[LTI_CLAIM_DEEP_LINKING_SETTINGS];
+  const parsedDeepLinkingSettings = parseLtiDeepLinkingSettings(deepLinkingSettings);
 
-  const isInstructor = hasRole(roles, 'Instructor');
-  const isStudent = hasRole(roles, 'Learner');
-  const isAdmin = hasRole(roles, 'Administrator');
+  const isInstructor = hasLtiInstructorRole(roles);
+  const isStudent = hasLtiLearnerRole(roles);
+  const isAdmin = hasLtiAdministratorRole(roles);
 
   const services: Record<string, unknown> = {};
   if (agsEndpoint) {
@@ -60,20 +66,11 @@ export function createSession(
       versions: nrpsService.service_versions || [],
     };
   }
-  if (deepLinkingSettings) {
-    services.deepLinking = {
-      returnUrl: deepLinkingSettings.deep_link_return_url,
-      acceptTypes: deepLinkingSettings.accept_types || [],
-      acceptPresentationDocumentTargets:
-        deepLinkingSettings.accept_presentation_document_targets || [],
-      acceptMediaTypes: deepLinkingSettings.accept_media_types,
-      autoCreate: deepLinkingSettings.auto_create,
-      data: deepLinkingSettings.data,
-    };
+  if (parsedDeepLinkingSettings) {
+    services.deepLinking = parsedDeepLinkingSettings;
   }
 
-  // Extract simplified roles
-  const simplifiedRoles = simplifyRoles(roles);
+  const simplifiedRoles = simplifyLtiRoles(roles);
 
   return {
     jwtPayload: lti13JwtPayload,
@@ -94,13 +91,11 @@ export function createSession(
     platform: {
       issuer: lti13JwtPayload.iss,
       clientId: getSessionClientId(lti13JwtPayload.aud, options.clientId),
-      deploymentId:
-        lti13JwtPayload['https://purl.imsglobal.org/spec/lti/claim/deployment_id'],
+      deploymentId: lti13JwtPayload[LTI_CLAIM_DEPLOYMENT_ID],
       name: platform?.name || lti13JwtPayload.iss,
     },
     launch: {
-      target:
-        lti13JwtPayload['https://purl.imsglobal.org/spec/lti/claim/target_link_uri'],
+      target: lti13JwtPayload[LTI_CLAIM_TARGET_LINK_URI],
     },
     resourceLink: resourceLink
       ? {
@@ -114,21 +109,9 @@ export function createSession(
     isInstructor,
     isStudent,
     isAssignmentAndGradesAvailable: !!agsEndpoint,
-    isDeepLinkingAvailable: !!deepLinkingSettings,
+    isDeepLinkingAvailable: !!parsedDeepLinkingSettings,
     isNameAndRolesAvailable: !!nrpsService,
   };
-}
-
-function simplifyRoles(roles: string[]): string[] {
-  const simplified = new Set<string>();
-  for (const role of roles) {
-    for (const [key, value] of Object.entries(ROLE_MAPPINGS)) {
-      if (role.includes(key)) {
-        simplified.add(value);
-      }
-    }
-  }
-  return [...simplified];
 }
 
 function getSessionClientId(
@@ -143,8 +126,4 @@ function getSessionClientId(
   }
 
   throw new Error('Cannot determine session client_id from multiple audiences');
-}
-
-function hasRole(roles: string[], pattern: string): boolean {
-  return roles.some((role) => role.includes(pattern));
 }
