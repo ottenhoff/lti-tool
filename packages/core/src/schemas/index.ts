@@ -31,6 +31,16 @@ export {
   type LTI13JwtPayload,
 } from './lti13/lti13JwtPayload.schema.js';
 export {
+  LTIDynamicRegistrationSessionSchema,
+  LTISessionContextSchema,
+  LTISessionLaunchSchema,
+  LTISessionPlatformSchema,
+  LTISessionResourceLinkSchema,
+  LTISessionSchema,
+  LTISessionServicesSchema,
+  LTISessionUserSchema,
+} from './ltiSession.schema.js';
+export {
   LTI13LaunchSchema,
   VerifyLaunchParamsSchema,
 } from './lti13/lti13Launch.schema.js';
