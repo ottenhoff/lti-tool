@@ -78,6 +78,13 @@ export {
   type ParsedLtiLaunchForm,
 } from './utils/ltiRequestParsing.js';
 export {
+  importLtiToolKeyPairFromJwk,
+  LtiToolKeyPairImportError,
+  type LtiToolKeyMaterial,
+  type LtiToolKeyPairImportErrorCode,
+  type LtiToolPrivateJwkInput,
+} from './utils/ltiToolKeyPair.js';
+export {
   parsePersistedLtiDynamicRegistrationSession,
   parsePersistedLtiSession,
   serializeLtiDynamicRegistrationSession,
