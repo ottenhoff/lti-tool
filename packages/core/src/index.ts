@@ -26,6 +26,14 @@ export {
   type LtiSimplifiedRole,
 } from './utils/ltiRoles.js';
 export {
+  getLtiAgsService,
+  hasLtiAgsScope,
+  isLtiAgsAvailable,
+  isLtiAgsLineItemAvailable,
+  isLtiAgsLineItemsAvailable,
+  type LtiAgsService,
+} from './utils/ags.js';
+export {
   getLtiMemberDisplayName,
   getLtiNrpsService,
   hasLtiMemberRoleKind,
