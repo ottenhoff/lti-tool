@@ -367,6 +367,79 @@ describe('LTI Integration Tests', () => {
       expect(mockStorage.addSession).toHaveBeenCalledWith(session);
     });
 
+    it('authorizes verified launches with app metadata', async () => {
+      const ltiPayload = createMockLTIPayload({
+        nonce: 'test-nonce',
+      });
+      const { SignJWT } = await import('jose');
+      const jwt = await new SignJWT(ltiPayload)
+        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
+        .sign(platformKeyPair.privateKey);
+      const stateJwt = await new SignJWT({
+        nonce: 'test-nonce',
+        iss: 'https://platform.example.com',
+        client_id: 'client123',
+        target_link_uri: 'https://tool.example.com/content',
+        exp: Math.floor(Date.now() / 1000) + 300,
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .sign(stateSecret);
+
+      const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt, {
+        authorizeVerifiedLaunch: (launch) => {
+          expect(launch.issuer).toBe('https://platform.example.com');
+          expect(launch.clientId).toBe('client123');
+
+          return {
+            success: true,
+            data: {
+              tenantId: 'tenant-1',
+              installationId: 'installation-1',
+            },
+          };
+        },
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error('Expected launch authorization success');
+      expect(result.launch.authorization).toEqual({
+        tenantId: 'tenant-1',
+        installationId: 'installation-1',
+      });
+    });
+
+    it('reports verified launch authorization failures distinctly', async () => {
+      const ltiPayload = createMockLTIPayload({
+        nonce: 'test-nonce',
+      });
+      const { SignJWT } = await import('jose');
+      const jwt = await new SignJWT(ltiPayload)
+        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
+        .sign(platformKeyPair.privateKey);
+      const stateJwt = await new SignJWT({
+        nonce: 'test-nonce',
+        iss: 'https://platform.example.com',
+        client_id: 'client123',
+        target_link_uri: 'https://tool.example.com/content',
+        exp: Math.floor(Date.now() / 1000) + 300,
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .sign(stateSecret);
+
+      const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt, {
+        authorizeVerifiedLaunch: () => ({
+          success: false,
+          code: 'installation_not_authorized',
+          message: 'Installation is not enabled for this app',
+        }),
+      });
+
+      expect(result.success).toBe(false);
+      if (result.success) throw new Error('Expected launch authorization failure');
+      expect(result.error.code).toBe('verified_launch_authorization_failed');
+      expect(result.error.message).toBe('Installation is not enabled for this app');
+    });
+
     it('returns structured launch verification errors', async () => {
       const result = await ltiTool.verifyLaunchDetailed('', '');
 

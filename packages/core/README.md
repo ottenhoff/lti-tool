@@ -64,6 +64,31 @@ if (result.success) {
 }
 ```
 
+Applications can also authorize a protocol-verified launch against their own
+registry and attach typed metadata for downstream handling:
+
+```typescript
+const result = await ltiTool.verifyLaunchDetailed(idToken, state, {
+  authorizeVerifiedLaunch: async (launch) => {
+    const installation = await registry.findInstallation({
+      issuer: launch.issuer,
+      clientId: launch.clientId,
+    });
+
+    return installation === undefined
+      ? { success: false, code: 'installation_not_authorized' }
+      : { success: true, data: installation };
+  },
+});
+
+if (result.success) {
+  const { authorization } = result.launch;
+  const session = await ltiTool.createSessionFromVerifiedLaunch(result.launch);
+} else if (result.error.code === 'verified_launch_authorization_failed') {
+  // The launch was valid LTI, but this app did not authorize the installation.
+}
+```
+
 ## Persisted session JSON
 
 Database-backed `LTIStorage` adapters can use the exported codecs to keep JSON

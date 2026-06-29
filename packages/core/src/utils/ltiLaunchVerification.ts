@@ -47,7 +47,8 @@ export type LtiLaunchVerificationErrorCode =
   | 'state_verification_failed'
   | 'target_link_uri_mismatch'
   | 'unknown_error'
-  | 'untrusted_audience';
+  | 'untrusted_audience'
+  | 'verified_launch_authorization_failed';
 
 export class LtiLaunchVerificationError extends Error {
   constructor(
@@ -69,15 +70,73 @@ export interface LtiVerifiedLaunch {
   launchConfig: LTILaunchConfig;
 }
 
-export type LtiLaunchVerificationResult =
+export type LtiAuthorizedLaunch<TAuthorization> = LtiVerifiedLaunch & {
+  authorization: TAuthorization;
+};
+
+export type LtiVerifiedLaunchAuthorizationResult<TAuthorization> =
   | {
       success: true;
-      launch: LtiVerifiedLaunch;
+      data: TAuthorization;
+    }
+  | {
+      success: false;
+      code: string;
+      message?: string;
+      cause?: unknown;
+    };
+
+export interface LtiVerifyLaunchDetailedOptions<TAuthorization> {
+  authorizeVerifiedLaunch?: (
+    launch: LtiVerifiedLaunch,
+  ) =>
+    | LtiVerifiedLaunchAuthorizationResult<TAuthorization>
+    | Promise<LtiVerifiedLaunchAuthorizationResult<TAuthorization>>;
+}
+
+export type LtiLaunchVerificationResult<
+  TLaunch extends LtiVerifiedLaunch = LtiVerifiedLaunch,
+> =
+  | {
+      success: true;
+      launch: TLaunch;
     }
   | {
       success: false;
       error: LtiLaunchVerificationError;
     };
+
+export async function authorizeVerifiedLaunch<TAuthorization>(
+  launch: LtiVerifiedLaunch,
+  authorize: (
+    launch: LtiVerifiedLaunch,
+  ) =>
+    | LtiVerifiedLaunchAuthorizationResult<TAuthorization>
+    | Promise<LtiVerifiedLaunchAuthorizationResult<TAuthorization>>,
+): Promise<LtiAuthorizedLaunch<TAuthorization>> {
+  try {
+    const result = await authorize(launch);
+    if (!result.success) {
+      throw new LtiLaunchVerificationError(
+        'verified_launch_authorization_failed',
+        result.message ?? `Verified launch authorization failed: ${result.code}`,
+        result,
+      );
+    }
+
+    return { ...launch, authorization: result.data };
+  } catch (error) {
+    if (error instanceof LtiLaunchVerificationError) {
+      throw error;
+    }
+
+    throw new LtiLaunchVerificationError(
+      'verified_launch_authorization_failed',
+      `Verified launch authorization failed: ${formatError(error)}`,
+      error,
+    );
+  }
+}
 
 export async function verifyLtiLaunch({
   idToken,

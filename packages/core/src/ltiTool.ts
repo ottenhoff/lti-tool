@@ -42,9 +42,12 @@ import { TokenService } from './services/token.service.js';
 import { formatError } from './utils/errorFormatting.js';
 import { getValidLaunchConfig } from './utils/launchConfigValidation.js';
 import {
+  authorizeVerifiedLaunch,
+  type LtiAuthorizedLaunch,
   type LtiLaunchJwksCache,
   LtiLaunchVerificationError,
   type LtiLaunchVerificationResult,
+  type LtiVerifyLaunchDetailedOptions,
   type LtiVerifiedLaunch,
   verifyLtiLaunch,
 } from './utils/ltiLaunchVerification.js';
@@ -223,10 +226,29 @@ export class LTITool {
   async verifyLaunchDetailed(
     idToken: string,
     state: string,
+  ): Promise<LtiLaunchVerificationResult>;
+
+  async verifyLaunchDetailed<TAuthorization>(
+    idToken: string,
+    state: string,
+    options: LtiVerifyLaunchDetailedOptions<TAuthorization>,
+  ): Promise<LtiLaunchVerificationResult<LtiAuthorizedLaunch<TAuthorization>>>;
+
+  async verifyLaunchDetailed<TAuthorization>(
+    idToken: string,
+    state: string,
+    options?: LtiVerifyLaunchDetailedOptions<TAuthorization>,
   ): Promise<LtiLaunchVerificationResult> {
     try {
       const launch = await this.verifyLaunchInternal(idToken, state);
-      return { success: true, launch };
+      if (!options?.authorizeVerifiedLaunch) {
+        return { success: true, launch };
+      }
+
+      return {
+        success: true,
+        launch: await authorizeVerifiedLaunch(launch, options.authorizeVerifiedLaunch),
+      };
     } catch (error) {
       if (error instanceof LtiLaunchVerificationError) {
         return { success: false, error };
