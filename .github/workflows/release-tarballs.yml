@@ -41,6 +41,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Build packages
+        run: npm run build
+
       - name: Type check
         run: npm run type-check
 
@@ -49,9 +52,6 @@ jobs:
 
       - name: Run core integration tests
         run: npx vitest run packages/core/test/*.integration.test.ts
-
-      - name: Build core package
-        run: npm run build --workspace=@lti-tool/core
 
       - name: Pack core package
         id: pack
