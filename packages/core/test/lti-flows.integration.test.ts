@@ -371,19 +371,7 @@ describe('LTI Integration Tests', () => {
       const ltiPayload = createMockLTIPayload({
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt, {
         authorizeVerifiedLaunch: (launch) => {
@@ -412,19 +400,7 @@ describe('LTI Integration Tests', () => {
       const ltiPayload = createMockLTIPayload({
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt, {
         authorizeVerifiedLaunch: () => ({
@@ -454,19 +430,7 @@ describe('LTI Integration Tests', () => {
       const ltiPayload = createMockLTIPayload({
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt);
 
@@ -480,19 +444,7 @@ describe('LTI Integration Tests', () => {
       const ltiPayload = createMockLTIPayload({
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt);
 
@@ -515,19 +467,7 @@ describe('LTI Integration Tests', () => {
       const ltiPayload = createMockLTIPayload({
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt);
 
@@ -543,19 +483,7 @@ describe('LTI Integration Tests', () => {
       const ltiPayload = createMockLTIPayload({
         nonce: 'test-nonce',
       });
-      const { SignJWT } = await import('jose');
-      const jwt = await new SignJWT(ltiPayload)
-        .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-        .sign(platformKeyPair.privateKey);
-      const stateJwt = await new SignJWT({
-        nonce: 'test-nonce',
-        iss: 'https://platform.example.com',
-        client_id: 'client123',
-        target_link_uri: 'https://tool.example.com/content',
-        exp: Math.floor(Date.now() / 1000) + 300,
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .sign(stateSecret);
+      const { jwt, stateJwt } = await signLaunchAndState(ltiPayload);
 
       const result = await ltiTool.verifyLaunchDetailed(jwt, stateJwt);
 

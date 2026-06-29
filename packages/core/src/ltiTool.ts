@@ -43,8 +43,8 @@ import { formatError } from './utils/errorFormatting.js';
 import { getValidLaunchConfig } from './utils/launchConfigValidation.js';
 import {
   authorizeVerifiedLaunch,
-  type LtiAuthorizedLaunch,
   type LtiLaunchJwksCache,
+  type LtiAuthorizedLaunch,
   LtiLaunchVerificationError,
   type LtiLaunchVerificationResult,
   type LtiVerifyLaunchDetailedOptions,
