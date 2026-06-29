@@ -464,7 +464,7 @@ describe('LTI Integration Tests', () => {
     });
 
     it('reports launch config storage failures precisely', async () => {
-      vi.mocked(mockStorage.getClientById).mockRejectedValue(
+      vi.mocked(mockStorage.getLaunchConfig).mockRejectedValue(
         new Error('database unavailable'),
       );
       const ltiPayload = createMockLTIPayload({
