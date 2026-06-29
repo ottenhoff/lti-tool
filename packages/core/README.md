@@ -49,6 +49,17 @@ When creating a session from a payload not returned directly by `verifyLaunch` o
 the same `LTITool` instance, pass the verified client ID as the second argument
 if the launch ID token contains multiple audiences.
 
+For structured verification flows, create the session from the verified launch so
+the verified client ID is carried forward automatically:
+
+```typescript
+const result = await ltiTool.verifyLaunchDetailed(idToken, state);
+
+if (result.success) {
+  const session = await ltiTool.createSessionFromVerifiedLaunch(result.launch);
+}
+```
+
 ## Persisted session JSON
 
 Database-backed `LTIStorage` adapters can use the exported codecs to keep JSON

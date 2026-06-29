@@ -458,6 +458,19 @@ export class LTITool {
   }
 
   /**
+   * Creates and stores a new LTI session from a previously verified launch.
+   *
+   * This is the recommended session creation path after verifyLaunchDetailed(), because it
+   * preserves the verified client ID for multi-audience launch tokens.
+   *
+   * @param launch - Verified launch returned by verifyLaunchDetailed()
+   * @returns Created session object with user, context, and service information
+   */
+  async createSessionFromVerifiedLaunch(launch: LtiVerifiedLaunch): Promise<LTISession> {
+    return await this.createSession(launch.payload, launch.clientId);
+  }
+
+  /**
    * Retrieves an existing LTI session by session ID.
    *
    * @param sessionId - Unique session identifier
