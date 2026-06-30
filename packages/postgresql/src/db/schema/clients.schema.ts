@@ -1,18 +1,29 @@
 import { index, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
+import {
+  LTI_CLIENT_ID_LENGTH,
+  LTI_COLUMNS,
+  LTI_ID_LENGTH,
+  LTI_INDEXES,
+  LTI_ISS_LENGTH,
+  LTI_NAME_LENGTH,
+  LTI_TABLES,
+  LTI_UNIQUES,
+} from '#storage/schema-definitions';
+
 export const clientsTable = pgTable(
-  'clients',
+  LTI_TABLES.clients,
   {
-    id: varchar('id', { length: 36 }).primaryKey(),
-    name: varchar('name', { length: 255 }).notNull(),
-    iss: varchar('iss', { length: 255 }).notNull(),
-    clientId: varchar('client_id', { length: 255 }).notNull(),
-    authUrl: text('auth_url').notNull(),
-    tokenUrl: text('token_url').notNull(),
-    jwksUrl: text('jwks_url').notNull(),
+    id: varchar(LTI_COLUMNS.id, { length: LTI_ID_LENGTH }).primaryKey(),
+    name: varchar(LTI_COLUMNS.platformName, { length: LTI_NAME_LENGTH }).notNull(),
+    iss: varchar(LTI_COLUMNS.iss, { length: LTI_ISS_LENGTH }).notNull(),
+    clientId: varchar(LTI_COLUMNS.clientId, { length: LTI_CLIENT_ID_LENGTH }).notNull(),
+    authUrl: text(LTI_COLUMNS.authUrl).notNull(),
+    tokenUrl: text(LTI_COLUMNS.tokenUrl).notNull(),
+    jwksUrl: text(LTI_COLUMNS.jwksUrl).notNull(),
   },
   (table) => [
-    index('issuer_client_idx').on(table.clientId, table.iss),
-    uniqueIndex('iss_client_id_unique').on(table.iss, table.clientId),
+    index(LTI_INDEXES.clientsIssuerClient).on(table.clientId, table.iss),
+    uniqueIndex(LTI_UNIQUES.clientsIssClientId).on(table.iss, table.clientId),
   ],
 );

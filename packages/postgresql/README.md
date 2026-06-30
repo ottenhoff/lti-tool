@@ -70,85 +70,53 @@ changes.
 
 ## Database Schema
 
-The adapter uses these tables:
+All SQL adapters use the same physical naming contract from the
+`#storage/schema-definitions` internal import.
 
-- **clients**: LTI platform clients
-  Unique constraint: `(iss, clientId)`
-- **deployments**: Platform deployments (many-to-one with clients)
-  Unique constraint: `(clientId, deploymentId)`
-- **sessions**: LTI sessions with expiration
-  Indexed: `expiresAt`
-- **nonces**: One-time use nonces
-  Primary key: `nonce`
-  Indexed: `expiresAt`
-- **registration_sessions**: Dynamic registration sessions
-  Indexed: `expiresAt`
+### Tables
 
-Primary keys are app-generated UUID strings. Tables include indexes for
-performance.
+- **lti_clients** — LTI platform clients
+- **lti_deployments** — platform deployments (many-to-one with clients)
+- **lti_sessions** — LTI launch sessions with expiration
+- **lti_nonces** — one-time use nonces
+- **lti_registration_sessions** — dynamic registration sessions
 
-### clients
+### lti_clients
 
-| Column     | Type         | Constraints           | Description                    |
-| ---------- | ------------ | --------------------- | ------------------------------ |
-| `id`       | UUID         | PRIMARY KEY, NOT NULL | Internal UUID for the client   |
-| `name`     | VARCHAR(255) | NOT NULL              | Human-readable platform name   |
-| `iss`      | VARCHAR(255) | NOT NULL              | Issuer URL (LMS platform)      |
-| `clientId` | VARCHAR(255) | NOT NULL              | LMS-provided client identifier |
-| `authUrl`  | TEXT         | NOT NULL              | OAuth2 authorization endpoint  |
-| `tokenUrl` | TEXT         | NOT NULL              | OAuth2 token endpoint          |
-| `jwksUrl`  | TEXT         | NOT NULL              | JWKS endpoint for public keys  |
+| Physical column | Type         | Description                    |
+| --------------- | ------------ | ------------------------------ |
+| `id`            | VARCHAR(36)  | Internal UUID for the client   |
+| `platform_name` | VARCHAR(255) | Human-readable platform name   |
+| `iss`           | VARCHAR(255) | Issuer URL (LMS platform)      |
+| `client_id`     | VARCHAR(255) | LMS-provided client identifier |
+| `auth_url`      | TEXT         | OAuth2 authorization endpoint  |
+| `token_url`     | TEXT         | OAuth2 token endpoint          |
+| `jwks_url`      | TEXT         | JWKS endpoint for public keys  |
 
-**Indexes:**
+### lti_deployments
 
-- `issuer_client_idx`: `(clientId, iss)` - For fast client lookups
-- `iss_client_id_unique`: `(iss, clientId)` - Unique constraint preventing duplicate clients
+| Physical column          | Type         | Description                        |
+| ------------------------ | ------------ | ---------------------------------- |
+| `id`                     | VARCHAR(36)  | Internal UUID for the deployment   |
+| `deployment_id`          | VARCHAR(255) | LMS-provided deployment identifier |
+| `deployment_name`        | VARCHAR(255) | Optional human-readable name       |
+| `deployment_description` | TEXT         | Optional description               |
+| `client_id`              | VARCHAR(36)  | References `lti_clients.id`        |
 
-### deployments
+### lti_sessions / lti_registration_sessions
 
-| Column         | Type         | Constraints           | Description                        |
-| -------------- | ------------ | --------------------- | ---------------------------------- |
-| `id`           | UUID         | PRIMARY KEY, NOT NULL | Internal UUID for the deployment   |
-| `deploymentId` | VARCHAR(255) | NOT NULL              | LMS-provided deployment identifier |
-| `name`         | VARCHAR(255) | NULL                  | Optional human-readable name       |
-| `description`  | TEXT         | NULL                  | Optional description               |
-| `clientId`     | UUID         | NOT NULL, FOREIGN KEY | References `clients.id`            |
+| Physical column | Type   | Description                   |
+| --------------- | ------ | ----------------------------- |
+| `id`            | UUID   | Session UUID                  |
+| `payload`       | JSONB  | Serialized session data       |
+| `expires_at`    | BIGINT | Expiration epoch milliseconds |
 
-**Indexes:**
+### lti_nonces
 
-- `deployment_id_idx`: `(deploymentId)` - For fast deployment lookups
-- `client_deployment_unique`: `(clientId, deploymentId)` - Unique constraint per client
-
-### sessions
-
-| Column      | Type   | Constraints           | Description                           |
-| ----------- | ------ | --------------------- | ------------------------------------- |
-| `id`        | UUID   | PRIMARY KEY, NOT NULL | Session UUID                          |
-| `data`      | JSONB  | NOT NULL              | Complete LTI session data             |
-| `expiresAt` | BIGINT | NOT NULL              | Session expiration epoch milliseconds |
-
-**Indexes:**
-
-- `sessions_expires_at_idx`: `(expiresAt)` - For cleanup queries and expiration checks
-
-### nonces
-
-| Column      | Type         | Constraints           | Description                         |
-| ----------- | ------------ | --------------------- | ----------------------------------- |
-| `nonce`     | VARCHAR(255) | PRIMARY KEY, NOT NULL | One-time use nonce value            |
-| `expiresAt` | BIGINT       | NOT NULL              | Nonce expiration epoch milliseconds |
-
-### registration_sessions
-
-| Column      | Type   | Constraints           | Description                           |
-| ----------- | ------ | --------------------- | ------------------------------------- |
-| `id`        | UUID   | PRIMARY KEY, NOT NULL | Registration session UUID             |
-| `data`      | JSONB  | NOT NULL              | Dynamic registration session data     |
-| `expiresAt` | BIGINT | NOT NULL              | Session expiration epoch milliseconds |
-
-**Indexes:**
-
-- `reg_sessions_expires_at_idx`: `(expiresAt)` - For cleanup queries and expiration checks
+| Physical column | Type         | Description                         |
+| --------------- | ------------ | ----------------------------------- |
+| `nonce`         | VARCHAR(255) | One-time use nonce value            |
+| `expires_at`    | BIGINT       | Nonce expiration epoch milliseconds |
 
 ## Connection Pool Behavior
 

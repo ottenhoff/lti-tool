@@ -69,6 +69,11 @@
       "source": "./packages/storage-relational/src/relationalStorage.ts",
       "types": "./packages/storage-relational/src/relationalStorage.ts",
       "import": "./dist/packages/storage-relational/src/relationalStorage.js"
+    },
+    "#storage/schema-definitions": {
+      "source": "./packages/storage-relational/src/schemaDefinitions.ts",
+      "types": "./packages/storage-relational/src/schemaDefinitions.ts",
+      "import": "./dist/packages/storage-relational/src/schemaDefinitions.js"
     }
   },
   "scripts": {
@@ -95,10 +100,7 @@
     "db:check:migrations": "npm run db:check:d1 && npm run db:check:mysql && npm run db:check:postgresql",
     "db:migrate:mysql": "drizzle-kit migrate --config packages/mysql/drizzle.config.ts",
     "db:migrate:postgresql": "drizzle-kit migrate --config packages/postgresql/drizzle.config.ts",
-    "changeset": "changeset",
-    "changeset:version": "changeset version",
-    "changeset:publish": "changeset publish",
-    "release": "npm run build && changeset publish"
+    "release": "npm run build && npm publish --provenance --access public"
   },
   "dependencies": {
     "jose": "^6.2.3",
@@ -140,8 +142,6 @@
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1076.0",
     "@aws-sdk/util-dynamodb": "^3.996.5",
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0",
     "@types/node": "^25.9.4",
     "@vitest/coverage-v8": "^4.1.9",
     "dotenv": "^17.4.2",

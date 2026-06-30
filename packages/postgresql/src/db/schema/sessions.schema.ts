@@ -1,12 +1,19 @@
 import type { LTISession } from '@longsightgroup/lti-tool';
 import { bigint, index, jsonb, pgTable, varchar } from 'drizzle-orm/pg-core';
 
+import {
+  LTI_COLUMNS,
+  LTI_ID_LENGTH,
+  LTI_INDEXES,
+  LTI_TABLES,
+} from '#storage/schema-definitions';
+
 export const sessionsTable = pgTable(
-  'sessions',
+  LTI_TABLES.sessions,
   {
-    id: varchar('id', { length: 36 }).primaryKey(),
-    data: jsonb('data').$type<Omit<LTISession, 'id'>>().notNull(),
-    expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
+    id: varchar(LTI_COLUMNS.id, { length: LTI_ID_LENGTH }).primaryKey(),
+    data: jsonb(LTI_COLUMNS.payload).$type<Omit<LTISession, 'id'>>().notNull(),
+    expiresAt: bigint(LTI_COLUMNS.expiresAt, { mode: 'number' }).notNull(),
   },
-  (table) => [index('sessions_expires_at_idx').on(table.expiresAt)],
+  (table) => [index(LTI_INDEXES.sessionsExpiresAt).on(table.expiresAt)],
 );

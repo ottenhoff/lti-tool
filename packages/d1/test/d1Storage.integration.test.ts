@@ -142,7 +142,7 @@ describe('D1Storage with Miniflare D1', () => {
     it('does not retrieve expired sessions', async () => {
       await harness.sql(
         'run',
-        'INSERT INTO lti_tool_sessions (id, data, expires_at) VALUES (?, ?, ?)',
+        'INSERT INTO lti_sessions (id, payload, expires_at) VALUES (?, ?, ?)',
         [
           'expired-session',
           JSON.stringify({ user: { id: 'expired-user' } }),
@@ -163,7 +163,7 @@ describe('D1Storage with Miniflare D1', () => {
     it('returns false for expired nonces', async () => {
       await harness.sql(
         'run',
-        'INSERT INTO lti_tool_nonces (nonce, expires_at) VALUES (?, ?)',
+        'INSERT INTO lti_nonces (nonce, expires_at) VALUES (?, ?)',
         ['expired-nonce', pastTimestamp()],
       );
 
@@ -230,7 +230,7 @@ describe('D1Storage with Miniflare D1', () => {
     it('does not retrieve expired registration sessions', async () => {
       await harness.sql(
         'run',
-        'INSERT INTO lti_tool_registration_sessions (id, data, expires_at) VALUES (?, ?, ?)',
+        'INSERT INTO lti_registration_sessions (id, payload, expires_at) VALUES (?, ?, ?)',
         [
           'expired-registration-session',
           JSON.stringify({ state: 'expired' }),
@@ -248,12 +248,12 @@ describe('D1Storage with Miniflare D1', () => {
     it('deletes expired nonces, sessions, and registration sessions', async () => {
       await harness.sql(
         'run',
-        'INSERT INTO lti_tool_nonces (nonce, expires_at) VALUES (?, ?), (?, ?)',
+        'INSERT INTO lti_nonces (nonce, expires_at) VALUES (?, ?), (?, ?)',
         ['expired-nonce', pastTimestamp(), 'active-nonce', futureTimestamp()],
       );
       await harness.sql(
         'run',
-        'INSERT INTO lti_tool_sessions (id, data, expires_at) VALUES (?, ?, ?), (?, ?, ?)',
+        'INSERT INTO lti_sessions (id, payload, expires_at) VALUES (?, ?, ?), (?, ?, ?)',
         [
           'expired-session',
           '{}',
@@ -265,7 +265,7 @@ describe('D1Storage with Miniflare D1', () => {
       );
       await harness.sql(
         'run',
-        'INSERT INTO lti_tool_registration_sessions (id, data, expires_at) VALUES (?, ?, ?), (?, ?, ?)',
+        'INSERT INTO lti_registration_sessions (id, payload, expires_at) VALUES (?, ?, ?), (?, ?, ?)',
         [
           'expired-registration',
           '{}',
@@ -282,16 +282,13 @@ describe('D1Storage with Miniflare D1', () => {
         registrationSessionsDeleted: 1,
       });
       await expect(
-        harness.sql('first', 'SELECT COUNT(*) AS count FROM lti_tool_nonces'),
+        harness.sql('first', 'SELECT COUNT(*) AS count FROM lti_nonces'),
       ).resolves.toEqual({ count: 1 });
       await expect(
-        harness.sql('first', 'SELECT COUNT(*) AS count FROM lti_tool_sessions'),
+        harness.sql('first', 'SELECT COUNT(*) AS count FROM lti_sessions'),
       ).resolves.toEqual({ count: 1 });
       await expect(
-        harness.sql(
-          'first',
-          'SELECT COUNT(*) AS count FROM lti_tool_registration_sessions',
-        ),
+        harness.sql('first', 'SELECT COUNT(*) AS count FROM lti_registration_sessions'),
       ).resolves.toEqual({ count: 1 });
     });
   });

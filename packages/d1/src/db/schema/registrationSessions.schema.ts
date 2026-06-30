@@ -1,12 +1,16 @@
 import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import { LTI_COLUMNS, LTI_INDEXES, LTI_TABLES } from '#storage/schema-definitions';
+
 export const registrationSessionsTable = sqliteTable(
-  'lti_tool_registration_sessions',
+  LTI_TABLES.registrationSessions,
   {
-    id: text('id').primaryKey(),
-    data: text('data', { mode: 'json' }).$type<LTIDynamicRegistrationSession>().notNull(),
-    expiresAt: integer('expires_at').notNull(),
+    id: text(LTI_COLUMNS.id).primaryKey(),
+    data: text(LTI_COLUMNS.payload, { mode: 'json' })
+      .$type<LTIDynamicRegistrationSession>()
+      .notNull(),
+    expiresAt: integer(LTI_COLUMNS.expiresAt).notNull(),
   },
-  (table) => [index('lti_tool_registration_sessions_expires_at_idx').on(table.expiresAt)],
+  (table) => [index(LTI_INDEXES.registrationSessionsExpiresAt).on(table.expiresAt)],
 );

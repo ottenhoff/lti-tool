@@ -1,11 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1ea4749d-f792-4b96-82d1-a2543964ea15",
+  "id": "2d6f5ae4-ef8c-4242-8b55-735c556df7c9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "lti_tool_clients": {
-      "name": "lti_tool_clients",
+    "lti_clients": {
+      "name": "lti_clients",
       "columns": {
         "id": {
           "name": "id",
@@ -14,8 +14,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "name": {
-          "name": "name",
+        "platform_name": {
+          "name": "platform_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -58,13 +58,13 @@
         }
       },
       "indexes": {
-        "lti_tool_clients_issuer_client_idx": {
-          "name": "lti_tool_clients_issuer_client_idx",
+        "lti_clients_issuer_client_idx": {
+          "name": "lti_clients_issuer_client_idx",
           "columns": ["client_id", "iss"],
           "isUnique": false
         },
-        "lti_tool_clients_iss_client_id_unique": {
-          "name": "lti_tool_clients_iss_client_id_unique",
+        "lti_clients_iss_client_id_uniq": {
+          "name": "lti_clients_iss_client_id_uniq",
           "columns": ["iss", "client_id"],
           "isUnique": true
         }
@@ -74,8 +74,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "lti_tool_deployments": {
-      "name": "lti_tool_deployments",
+    "lti_deployments": {
+      "name": "lti_deployments",
       "columns": {
         "id": {
           "name": "id",
@@ -98,15 +98,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "name": {
-          "name": "name",
+        "deployment_name": {
+          "name": "deployment_name",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
+        "deployment_description": {
+          "name": "deployment_description",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -114,22 +114,22 @@
         }
       },
       "indexes": {
-        "lti_tool_deployments_deployment_id_idx": {
-          "name": "lti_tool_deployments_deployment_id_idx",
+        "lti_deployments_deployment_id_idx": {
+          "name": "lti_deployments_deployment_id_idx",
           "columns": ["deployment_id"],
           "isUnique": false
         },
-        "lti_tool_deployments_client_deployment_unique": {
-          "name": "lti_tool_deployments_client_deployment_unique",
+        "lti_deployments_client_deployment_uniq": {
+          "name": "lti_deployments_client_deployment_uniq",
           "columns": ["client_id", "deployment_id"],
           "isUnique": true
         }
       },
       "foreignKeys": {
-        "lti_tool_deployments_client_id_lti_tool_clients_id_fk": {
-          "name": "lti_tool_deployments_client_id_lti_tool_clients_id_fk",
-          "tableFrom": "lti_tool_deployments",
-          "tableTo": "lti_tool_clients",
+        "lti_deployments_client_id_lti_clients_id_fk": {
+          "name": "lti_deployments_client_id_lti_clients_id_fk",
+          "tableFrom": "lti_deployments",
+          "tableTo": "lti_clients",
           "columnsFrom": ["client_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -140,8 +140,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "lti_tool_nonces": {
-      "name": "lti_tool_nonces",
+    "lti_nonces": {
+      "name": "lti_nonces",
       "columns": {
         "nonce": {
           "name": "nonce",
@@ -159,8 +159,8 @@
         }
       },
       "indexes": {
-        "lti_tool_nonces_expires_at_idx": {
-          "name": "lti_tool_nonces_expires_at_idx",
+        "lti_nonces_expires_at_idx": {
+          "name": "lti_nonces_expires_at_idx",
           "columns": ["expires_at"],
           "isUnique": false
         }
@@ -170,8 +170,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "lti_tool_registration_sessions": {
-      "name": "lti_tool_registration_sessions",
+    "lti_registration_sessions": {
+      "name": "lti_registration_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -180,8 +180,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "data": {
-          "name": "data",
+        "payload": {
+          "name": "payload",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -196,8 +196,8 @@
         }
       },
       "indexes": {
-        "lti_tool_registration_sessions_expires_at_idx": {
-          "name": "lti_tool_registration_sessions_expires_at_idx",
+        "lti_registration_sessions_expires_at_idx": {
+          "name": "lti_registration_sessions_expires_at_idx",
           "columns": ["expires_at"],
           "isUnique": false
         }
@@ -207,8 +207,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "lti_tool_sessions": {
-      "name": "lti_tool_sessions",
+    "lti_sessions": {
+      "name": "lti_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -217,8 +217,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "data": {
-          "name": "data",
+        "payload": {
+          "name": "payload",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -233,8 +233,8 @@
         }
       },
       "indexes": {
-        "lti_tool_sessions_expires_at_idx": {
-          "name": "lti_tool_sessions_expires_at_idx",
+        "lti_sessions_expires_at_idx": {
+          "name": "lti_sessions_expires_at_idx",
           "columns": ["expires_at"],
           "isUnique": false
         }

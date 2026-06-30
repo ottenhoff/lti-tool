@@ -33,13 +33,12 @@ const ltiTool = new LTITool({
 
 ## Schema
 
-This adapter creates prefixed tables:
+All SQL adapters share the same physical naming contract defined by the
+`#storage/schema-definitions` internal import:
 
-- `lti_tool_clients`
-- `lti_tool_deployments`
-- `lti_tool_sessions`
-- `lti_tool_nonces`
-- `lti_tool_registration_sessions`
+- Tables: `lti_clients`, `lti_deployments`, `lti_sessions`, `lti_nonces`, `lti_registration_sessions`
+- Columns: snake_case physical names (`platform_name`, `client_id`, `payload`, …)
+- Reserved-word-safe identifiers validated in CI
 
-The prefix keeps LTI storage separate from application tables in a shared D1
+The `lti_` prefix keeps LTI storage separate from application tables in a shared D1
 database.

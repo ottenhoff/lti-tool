@@ -44,12 +44,8 @@ jobs:
       - name: Smoke test dist imports
         run: npm run smoke-test:dist
 
-      - name: Create Release Pull Request or Publish to npm
-        uses: changesets/action@v1
-        with:
-          publish: npx changeset publish
-          title: 'ci: Version Packages'
-          commit: 'ci: Version Packages'
+      - name: Publish to npm
+        run: npm publish --provenance --access public
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

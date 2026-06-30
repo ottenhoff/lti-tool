@@ -1,11 +1,11 @@
 {
-  "id": "7e071465-0b94-4f8d-a120-45ddb5575592",
+  "id": "c32b44bf-7354-4326-bf81-3968bee3efd1",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.clients": {
-      "name": "clients",
+    "public.lti_clients": {
+      "name": "lti_clients",
       "schema": "",
       "columns": {
         "id": {
@@ -14,8 +14,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "name": {
-          "name": "name",
+        "platform_name": {
+          "name": "platform_name",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
@@ -52,8 +52,8 @@
         }
       },
       "indexes": {
-        "issuer_client_idx": {
-          "name": "issuer_client_idx",
+        "lti_clients_issuer_client_idx": {
+          "name": "lti_clients_issuer_client_idx",
           "columns": [
             {
               "expression": "client_id",
@@ -73,8 +73,8 @@
           "method": "btree",
           "with": {}
         },
-        "iss_client_id_unique": {
-          "name": "iss_client_id_unique",
+        "lti_clients_iss_client_id_uniq": {
+          "name": "lti_clients_iss_client_id_uniq",
           "columns": [
             {
               "expression": "iss",
@@ -102,8 +102,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.deployments": {
-      "name": "deployments",
+    "public.lti_deployments": {
+      "name": "lti_deployments",
       "schema": "",
       "columns": {
         "id": {
@@ -118,14 +118,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "name": {
-          "name": "name",
+        "deployment_name": {
+          "name": "deployment_name",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
-        "description": {
-          "name": "description",
+        "deployment_description": {
+          "name": "deployment_description",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -138,8 +138,8 @@
         }
       },
       "indexes": {
-        "deployment_id_idx": {
-          "name": "deployment_id_idx",
+        "lti_deployments_deployment_id_idx": {
+          "name": "lti_deployments_deployment_id_idx",
           "columns": [
             {
               "expression": "deployment_id",
@@ -153,8 +153,8 @@
           "method": "btree",
           "with": {}
         },
-        "client_deployment_unique": {
-          "name": "client_deployment_unique",
+        "lti_deployments_client_deployment_uniq": {
+          "name": "lti_deployments_client_deployment_uniq",
           "columns": [
             {
               "expression": "client_id",
@@ -176,10 +176,10 @@
         }
       },
       "foreignKeys": {
-        "deployments_client_id_clients_id_fk": {
-          "name": "deployments_client_id_clients_id_fk",
-          "tableFrom": "deployments",
-          "tableTo": "clients",
+        "lti_deployments_client_id_lti_clients_id_fk": {
+          "name": "lti_deployments_client_id_lti_clients_id_fk",
+          "tableFrom": "lti_deployments",
+          "tableTo": "lti_clients",
           "columnsFrom": ["client_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -192,8 +192,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.nonces": {
-      "name": "nonces",
+    "public.lti_nonces": {
+      "name": "lti_nonces",
       "schema": "",
       "columns": {
         "nonce": {
@@ -217,8 +217,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.registration_sessions": {
-      "name": "registration_sessions",
+    "public.lti_registration_sessions": {
+      "name": "lti_registration_sessions",
       "schema": "",
       "columns": {
         "id": {
@@ -227,8 +227,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "data": {
-          "name": "data",
+        "payload": {
+          "name": "payload",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true
@@ -241,8 +241,8 @@
         }
       },
       "indexes": {
-        "reg_sessions_expires_at_idx": {
-          "name": "reg_sessions_expires_at_idx",
+        "lti_registration_sessions_expires_at_idx": {
+          "name": "lti_registration_sessions_expires_at_idx",
           "columns": [
             {
               "expression": "expires_at",
@@ -264,8 +264,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.sessions": {
-      "name": "sessions",
+    "public.lti_sessions": {
+      "name": "lti_sessions",
       "schema": "",
       "columns": {
         "id": {
@@ -274,8 +274,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "data": {
-          "name": "data",
+        "payload": {
+          "name": "payload",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true
@@ -288,8 +288,8 @@
         }
       },
       "indexes": {
-        "sessions_expires_at_idx": {
-          "name": "sessions_expires_at_idx",
+        "lti_sessions_expires_at_idx": {
+          "name": "lti_sessions_expires_at_idx",
           "columns": [
             {
               "expression": "expires_at",

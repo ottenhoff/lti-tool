@@ -2,7 +2,7 @@
 
 Internal shared implementation for Drizzle-backed relational storage adapters.
 
-This package is not published as a standalone npm package. It is consumed through the root `#storage/relational-storage` import map by:
+This package is not published as a standalone npm package. It is consumed through root internal import maps by:
 
 - `packages/d1`
 - `packages/mysql`
@@ -13,6 +13,7 @@ This package is not published as a standalone npm package. It is consumed throug
 Shared modules in this package:
 
 - `relationalStorage.ts` — shared `LTIStorage` implementation
+- `schemaDefinitions.ts` — shared physical table/column/index names, exposed as `#storage/schema-definitions`
 - `deploymentRow.ts` / `storageRows.ts` — row mapping helpers
 - `mysqlDialect.ts` / `postgresDialect.ts` — SQL adapter dialect hooks
 

@@ -1,18 +1,25 @@
 import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import {
+  LTI_COLUMNS,
+  LTI_INDEXES,
+  LTI_TABLES,
+  LTI_UNIQUES,
+} from '#storage/schema-definitions';
+
 export const clientsTable = sqliteTable(
-  'lti_tool_clients',
+  LTI_TABLES.clients,
   {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    iss: text('iss').notNull(),
-    clientId: text('client_id').notNull(),
-    authUrl: text('auth_url').notNull(),
-    tokenUrl: text('token_url').notNull(),
-    jwksUrl: text('jwks_url').notNull(),
+    id: text(LTI_COLUMNS.id).primaryKey(),
+    name: text(LTI_COLUMNS.platformName).notNull(),
+    iss: text(LTI_COLUMNS.iss).notNull(),
+    clientId: text(LTI_COLUMNS.clientId).notNull(),
+    authUrl: text(LTI_COLUMNS.authUrl).notNull(),
+    tokenUrl: text(LTI_COLUMNS.tokenUrl).notNull(),
+    jwksUrl: text(LTI_COLUMNS.jwksUrl).notNull(),
   },
   (table) => [
-    index('lti_tool_clients_issuer_client_idx').on(table.clientId, table.iss),
-    uniqueIndex('lti_tool_clients_iss_client_id_unique').on(table.iss, table.clientId),
+    index(LTI_INDEXES.clientsIssuerClient).on(table.clientId, table.iss),
+    uniqueIndex(LTI_UNIQUES.clientsIssClientId).on(table.iss, table.clientId),
   ],
 );

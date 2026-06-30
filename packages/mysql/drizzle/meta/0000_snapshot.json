@@ -1,11 +1,11 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "6363e9d8-669d-482e-9410-3fa45d7034ea",
+  "id": "7b142ce1-567a-4f6b-9d36-dbfcfae014fb",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "clients": {
-      "name": "clients",
+    "lti_clients": {
+      "name": "lti_clients",
       "columns": {
         "id": {
           "name": "id",
@@ -14,8 +14,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "name": {
-          "name": "name",
+        "platform_name": {
+          "name": "platform_name",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
@@ -28,29 +28,29 @@
           "notNull": true,
           "autoincrement": false
         },
-        "clientId": {
-          "name": "clientId",
+        "client_id": {
+          "name": "client_id",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "authUrl": {
-          "name": "authUrl",
+        "auth_url": {
+          "name": "auth_url",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "tokenUrl": {
-          "name": "tokenUrl",
+        "token_url": {
+          "name": "token_url",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "jwksUrl": {
-          "name": "jwksUrl",
+        "jwks_url": {
+          "name": "jwks_url",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -58,29 +58,29 @@
         }
       },
       "indexes": {
-        "issuer_client_idx": {
-          "name": "issuer_client_idx",
-          "columns": ["clientId", "iss"],
+        "lti_clients_issuer_client_idx": {
+          "name": "lti_clients_issuer_client_idx",
+          "columns": ["client_id", "iss"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "clients_id": {
-          "name": "clients_id",
+        "lti_clients_id": {
+          "name": "lti_clients_id",
           "columns": ["id"]
         }
       },
       "uniqueConstraints": {
-        "iss_client_id_unique": {
-          "name": "iss_client_id_unique",
-          "columns": ["iss", "clientId"]
+        "lti_clients_iss_client_id_uniq": {
+          "name": "lti_clients_iss_client_id_uniq",
+          "columns": ["iss", "client_id"]
         }
       },
       "checkConstraint": {}
     },
-    "deployments": {
-      "name": "deployments",
+    "lti_deployments": {
+      "name": "lti_deployments",
       "columns": {
         "id": {
           "name": "id",
@@ -89,29 +89,29 @@
           "notNull": true,
           "autoincrement": false
         },
-        "deploymentId": {
-          "name": "deploymentId",
+        "deployment_id": {
+          "name": "deployment_id",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "name": {
-          "name": "name",
+        "deployment_name": {
+          "name": "deployment_name",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
+        "deployment_description": {
+          "name": "deployment_description",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "clientId": {
-          "name": "clientId",
+        "client_id": {
+          "name": "client_id",
           "type": "varchar(36)",
           "primaryKey": false,
           "notNull": true,
@@ -119,39 +119,39 @@
         }
       },
       "indexes": {
-        "deployment_id_idx": {
-          "name": "deployment_id_idx",
-          "columns": ["deploymentId"],
+        "lti_deployments_deployment_id_idx": {
+          "name": "lti_deployments_deployment_id_idx",
+          "columns": ["deployment_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "deployments_clientId_clients_id_fk": {
-          "name": "deployments_clientId_clients_id_fk",
-          "tableFrom": "deployments",
-          "tableTo": "clients",
-          "columnsFrom": ["clientId"],
+        "lti_deployments_client_id_lti_clients_id_fk": {
+          "name": "lti_deployments_client_id_lti_clients_id_fk",
+          "tableFrom": "lti_deployments",
+          "tableTo": "lti_clients",
+          "columnsFrom": ["client_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
-        "deployments_id": {
-          "name": "deployments_id",
+        "lti_deployments_id": {
+          "name": "lti_deployments_id",
           "columns": ["id"]
         }
       },
       "uniqueConstraints": {
-        "client_deployment_unique": {
-          "name": "client_deployment_unique",
-          "columns": ["clientId", "deploymentId"]
+        "lti_deployments_client_deployment_uniq": {
+          "name": "lti_deployments_client_deployment_uniq",
+          "columns": ["client_id", "deployment_id"]
         }
       },
       "checkConstraint": {}
     },
-    "nonces": {
-      "name": "nonces",
+    "lti_nonces": {
+      "name": "lti_nonces",
       "columns": {
         "nonce": {
           "name": "nonce",
@@ -160,8 +160,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "expiresAt": {
-          "name": "expiresAt",
+        "expires_at": {
+          "name": "expires_at",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true,
@@ -171,16 +171,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "nonces_nonce": {
-          "name": "nonces_nonce",
+        "lti_nonces_nonce": {
+          "name": "lti_nonces_nonce",
           "columns": ["nonce"]
         }
       },
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "registrationSessions": {
-      "name": "registrationSessions",
+    "lti_registration_sessions": {
+      "name": "lti_registration_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -189,15 +189,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "data": {
-          "name": "data",
+        "payload": {
+          "name": "payload",
           "type": "json",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "expiresAt": {
-          "name": "expiresAt",
+        "expires_at": {
+          "name": "expires_at",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true,
@@ -205,24 +205,24 @@
         }
       },
       "indexes": {
-        "expires_at_idx": {
-          "name": "expires_at_idx",
-          "columns": ["expiresAt"],
+        "lti_registration_sessions_expires_at_idx": {
+          "name": "lti_registration_sessions_expires_at_idx",
+          "columns": ["expires_at"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "registrationSessions_id": {
-          "name": "registrationSessions_id",
+        "lti_registration_sessions_id": {
+          "name": "lti_registration_sessions_id",
           "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "sessions": {
-      "name": "sessions",
+    "lti_sessions": {
+      "name": "lti_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -231,15 +231,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "data": {
-          "name": "data",
+        "payload": {
+          "name": "payload",
           "type": "json",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "expiresAt": {
-          "name": "expiresAt",
+        "expires_at": {
+          "name": "expires_at",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true,
@@ -247,16 +247,16 @@
         }
       },
       "indexes": {
-        "expires_at_idx": {
-          "name": "expires_at_idx",
-          "columns": ["expiresAt"],
+        "lti_sessions_expires_at_idx": {
+          "name": "lti_sessions_expires_at_idx",
+          "columns": ["expires_at"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "sessions_id": {
-          "name": "sessions_id",
+        "lti_sessions_id": {
+          "name": "lti_sessions_id",
           "columns": ["id"]
         }
       },

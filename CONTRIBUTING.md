@@ -59,7 +59,11 @@ Drizzle schema files are the source of truth. After changing schema files:
 
 Do not run `drizzle-kit` from inside `packages/<adapter>/`; the config paths assume the monorepo root as the working directory.
 
-Regenerating the initial `0000_*` migration is a breaking change for existing deployments. Document upgrade steps in the PR when squashed migrations change.
+Physical SQL identifiers (tables, columns, indexes) are centralized behind the
+`#storage/schema-definitions` internal import. All adapters must import those
+constants rather than hardcoding names in schema files.
+
+When regenerating the initial `0000_*` migration, drop and recreate the database, then reapply migrations.
 
 ## Pull Requests
 

@@ -1,20 +1,35 @@
 import { index, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
+import {
+  LTI_COLUMNS,
+  LTI_DEPLOYMENT_ID_LENGTH,
+  LTI_ID_LENGTH,
+  LTI_INDEXES,
+  LTI_NAME_LENGTH,
+  LTI_TABLES,
+  LTI_UNIQUES,
+} from '#storage/schema-definitions';
+
 import { clientsTable } from './clients.schema.js';
 
 export const deploymentsTable = pgTable(
-  'deployments',
+  LTI_TABLES.deployments,
   {
-    id: varchar('id', { length: 36 }).primaryKey(),
-    deploymentId: varchar('deployment_id', { length: 255 }).notNull(),
-    name: varchar('name', { length: 255 }),
-    description: text('description'),
-    clientId: varchar('client_id', { length: 36 })
+    id: varchar(LTI_COLUMNS.id, { length: LTI_ID_LENGTH }).primaryKey(),
+    deploymentId: varchar(LTI_COLUMNS.deploymentId, {
+      length: LTI_DEPLOYMENT_ID_LENGTH,
+    }).notNull(),
+    name: varchar(LTI_COLUMNS.deploymentName, { length: LTI_NAME_LENGTH }),
+    description: text(LTI_COLUMNS.deploymentDescription),
+    clientId: varchar(LTI_COLUMNS.clientId, { length: LTI_ID_LENGTH })
       .notNull()
       .references(() => clientsTable.id, { onDelete: 'cascade' }),
   },
   (table) => [
-    index('deployment_id_idx').on(table.deploymentId),
-    uniqueIndex('client_deployment_unique').on(table.clientId, table.deploymentId),
+    index(LTI_INDEXES.deploymentsDeploymentId).on(table.deploymentId),
+    uniqueIndex(LTI_UNIQUES.deploymentsClientDeployment).on(
+      table.clientId,
+      table.deploymentId,
+    ),
   ],
 );

@@ -1,10 +1,12 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import { LTI_COLUMNS, LTI_INDEXES, LTI_TABLES } from '#storage/schema-definitions';
+
 export const noncesTable = sqliteTable(
-  'lti_tool_nonces',
+  LTI_TABLES.nonces,
   {
-    nonce: text('nonce').primaryKey(),
-    expiresAt: integer('expires_at').notNull(),
+    nonce: text(LTI_COLUMNS.nonce).primaryKey(),
+    expiresAt: integer(LTI_COLUMNS.expiresAt).notNull(),
   },
-  (table) => [index('lti_tool_nonces_expires_at_idx').on(table.expiresAt)],
+  (table) => [index(LTI_INDEXES.noncesExpiresAt).on(table.expiresAt)],
 );
