@@ -11,7 +11,7 @@ import {
   resolveStorageLogger,
 } from '#storage/relational-storage';
 
-import { NONCE_TTL, SESSION_TTL } from './cacheConfig.js';
+import { SESSION_TTL } from './cacheConfig.js';
 import * as schema from './db/schema/index.js';
 import type { D1StorageConfig } from './interfaces/d1StorageConfig.js';
 
@@ -41,8 +41,10 @@ function createD1Dialect(db: DrizzleD1Database<typeof schema>): RelationalStorag
       insertD1Deployment(db, clientId, deployment),
     executeMutation: executeD1Mutation,
     deleteClient: (clientId) => deleteD1Client(db, clientId),
-    insertSession: (session, expiresAt) => insertD1Session(db, session, expiresAt),
-    validateNonce: (nonce) => validateD1Nonce(db, nonce),
+    insertSession: (session, expiresAt) =>
+      insertD1Session(db, session, expiresAt as string),
+    claimNonce: (nonce, expiresAt) =>
+      claimD1Nonce(db, nonce, expiresAt as string),
     serializeDate: (date) => date.toISOString(),
     setRegistrationSession: (sessionId, session) =>
       setD1RegistrationSession(db, sessionId, session),
@@ -94,17 +96,16 @@ async function deleteD1Client(
   await db.delete(schema.clientsTable).where(eq(schema.clientsTable.id, clientId)).run();
 }
 
-async function validateD1Nonce(
+async function claimD1Nonce(
   db: DrizzleD1Database<typeof schema>,
   nonce: string,
+  expiresAt: string,
 ): Promise<boolean> {
-  const now = new Date();
   const result = await db
     .insert(schema.noncesTable)
     .values({
       nonce,
-      expiresAt: new Date(now.getTime() + NONCE_TTL * 1000).toISOString(),
-      usedAt: now.toISOString(),
+      expiresAt,
     })
     .onConflictDoNothing()
     .run();
@@ -115,17 +116,15 @@ async function validateD1Nonce(
 async function insertD1Session(
   db: DrizzleD1Database<typeof schema>,
   session: Parameters<RelationalStorageDialect['insertSession']>[0],
-  expiresAt: Parameters<RelationalStorageDialect['insertSession']>[1],
+  expiresAt: string,
 ): Promise<void> {
   const { id, ...data } = session;
-  const sessionExpiresAt =
-    typeof expiresAt === 'string' ? expiresAt : expiresAt.toISOString();
   await db
     .insert(schema.sessionsTable)
     .values({
       id,
       data,
-      expiresAt: sessionExpiresAt,
+      expiresAt,
     })
     .run();
 }

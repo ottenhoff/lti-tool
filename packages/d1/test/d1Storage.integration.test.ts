@@ -255,7 +255,7 @@ describe('D1Storage with Miniflare D1', () => {
     it('deletes expired nonces, sessions, and registration sessions', async () => {
       await harness.sql(
         'run',
-        'INSERT INTO lti_tool_nonces (nonce, expires_at, used_at) VALUES (?, ?, NULL), (?, ?, NULL)',
+        'INSERT INTO lti_tool_nonces (nonce, expires_at) VALUES (?, ?), (?, ?)',
         ['expired-nonce', pastIso(), 'active-nonce', futureIso()],
       );
       await harness.sql(

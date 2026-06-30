@@ -144,6 +144,16 @@ describe('PostgresStorage - Nonce Validation', () => {
     const result = await storage.validateNonce('dup-nonce');
     expect(result).toBe(false);
   });
+
+  it('should reject expired nonce still present before cleanup', async () => {
+    await db.insert(schema.noncesTable).values({
+      nonce: 'expired-nonce',
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    const result = await storage.validateNonce('expired-nonce');
+    expect(result).toBe(false);
+  });
 });
 
 describe('PostgresStorage - Launch Config', () => {

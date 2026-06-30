@@ -1,5 +1,5 @@
 import { isServerlessEnvironment } from '@longsightgroup/lti-tool';
-import { and, eq, gt, lt } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { Logger } from 'pino';
 import postgres from 'postgres';
@@ -11,10 +11,9 @@ import {
   type RelationalDatabase,
   type RelationalStorageDialect,
   resolveStorageLogger,
-  validateNonceSelectThenInsert,
 } from '#storage/relational-storage';
 
-import { NONCE_TTL, SESSION_TTL } from './cacheConfig.js';
+import { SESSION_TTL } from './cacheConfig.js';
 import * as schema from './db/schema/index.js';
 import type { PostgresStorageConfig } from './interfaces/postgresStorageConfig.js';
 
@@ -84,15 +83,13 @@ function createPostgresDialect(
     requireExistingClientBeforeDelete: true,
     insertSession: async (session, expiresAt) => {
       const { id, ...data } = session;
-      const sessionExpiresAt =
-        expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
       await db.insert(schema.sessionsTable).values({
         id,
         data,
-        expiresAt: sessionExpiresAt,
+        expiresAt: expiresAt as Date,
       });
     },
-    validateNonce: (nonce) => validatePostgresNonce(db, nonce),
+    claimNonce: (nonce, expiresAt) => claimPostgresNonce(db, nonce, expiresAt as Date),
     serializeDate: (date) => date,
     setRegistrationSession: async (sessionId, session) => {
       await db.insert(schema.registrationSessionsTable).values({
@@ -117,16 +114,18 @@ async function deletePostgresClient(
   });
 }
 
-function validatePostgresNonce(
+async function claimPostgresNonce(
   db: PostgresJsDatabase<typeof schema>,
   nonce: string,
+  expiresAt: Date,
 ): Promise<boolean> {
-  return validateNonceSelectThenInsert(db, nonce, {
-    nonceTtlSeconds: NONCE_TTL,
-    isDuplicateKeyError: isPostgresDuplicateKey,
-    selectExistingNonce: selectExistingPostgresNonce,
-    insertNonce: insertPostgresNonce,
-  });
+  const rows = await db
+    .insert(schema.noncesTable)
+    .values({ nonce, expiresAt })
+    .onConflictDoNothing()
+    .returning({ nonce: schema.noncesTable.nonce });
+
+  return rows.length === 1;
 }
 
 async function cleanupPostgres(
@@ -177,39 +176,4 @@ function resolveConnectionOptions(
     isServerless,
     max,
   };
-}
-
-function isPostgresDuplicateKey(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === '23505'
-  );
-}
-
-async function selectExistingPostgresNonce(
-  db: PostgresJsDatabase<typeof schema>,
-  nonce: string,
-): Promise<unknown | undefined> {
-  const [existing] = await db
-    .select()
-    .from(schema.noncesTable)
-    .where(
-      and(
-        eq(schema.noncesTable.nonce, nonce),
-        gt(schema.noncesTable.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
-
-  return existing;
-}
-
-function insertPostgresNonce(
-  db: PostgresJsDatabase<typeof schema>,
-  nonce: string,
-  expiresAt: Date,
-): Promise<unknown> {
-  return Promise.resolve(db.insert(schema.noncesTable).values({ nonce, expiresAt }));
 }

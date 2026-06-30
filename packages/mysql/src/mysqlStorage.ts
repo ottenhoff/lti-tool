@@ -1,5 +1,5 @@
 import { isServerlessEnvironment } from '@longsightgroup/lti-tool';
-import { and, eq, gt, lt } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 import { drizzle, type MySql2Database } from 'drizzle-orm/mysql2';
 import mysql from 'mysql2/promise';
 import type { Logger } from 'pino';
@@ -11,10 +11,9 @@ import {
   type RelationalDatabase,
   type RelationalStorageDialect,
   resolveStorageLogger,
-  validateNonceSelectThenInsert,
 } from '#storage/relational-storage';
 
-import { NONCE_TTL, SESSION_TTL } from './cacheConfig.js';
+import { SESSION_TTL } from './cacheConfig.js';
 import * as schema from './db/schema/index.js';
 import type { MySqlStorageConfig } from './interfaces/mySqlStorageConfig.js';
 
@@ -83,15 +82,13 @@ function createMySqlDialect(db: MySql2Database<typeof schema>): RelationalStorag
     requireExistingClientBeforeDelete: true,
     insertSession: async (session, expiresAt) => {
       const { id, ...data } = session;
-      const sessionExpiresAt =
-        expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
       await db.insert(schema.sessionsTable).values({
         id,
         data,
-        expiresAt: sessionExpiresAt,
+        expiresAt: expiresAt as Date,
       });
     },
-    validateNonce: (nonce) => validateMySqlNonce(db, nonce),
+    claimNonce: (nonce, expiresAt) => claimMySqlNonce(db, nonce, expiresAt as Date),
     serializeDate: (date) => date,
     setRegistrationSession: async (sessionId, session) => {
       await db.insert(schema.registrationSessionsTable).values({
@@ -116,16 +113,17 @@ async function deleteMySqlClient(
   });
 }
 
-function validateMySqlNonce(
+async function claimMySqlNonce(
   db: MySql2Database<typeof schema>,
   nonce: string,
+  expiresAt: Date,
 ): Promise<boolean> {
-  return validateNonceSelectThenInsert(db, nonce, {
-    nonceTtlSeconds: NONCE_TTL,
-    isDuplicateKeyError: isMySqlDuplicateKey,
-    selectExistingNonce: selectExistingMySqlNonce,
-    insertNonce: insertMySqlNonce,
-  });
+  const result = await db
+    .insert(schema.noncesTable)
+    .ignore()
+    .values({ nonce, expiresAt });
+
+  return getMySqlAffectedRows(result) === 1;
 }
 
 async function cleanupMySql(
@@ -184,39 +182,4 @@ function getMySqlAffectedRows(result: unknown): number {
   }
 
   return Number(summary.affectedRows ?? 0);
-}
-
-function isMySqlDuplicateKey(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === 'ER_DUP_ENTRY'
-  );
-}
-
-async function selectExistingMySqlNonce(
-  db: MySql2Database<typeof schema>,
-  nonce: string,
-): Promise<unknown | undefined> {
-  const [existing] = await db
-    .select()
-    .from(schema.noncesTable)
-    .where(
-      and(
-        eq(schema.noncesTable.nonce, nonce),
-        gt(schema.noncesTable.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
-
-  return existing;
-}
-
-function insertMySqlNonce(
-  db: MySql2Database<typeof schema>,
-  nonce: string,
-  expiresAt: Date,
-): Promise<unknown> {
-  return Promise.resolve(db.insert(schema.noncesTable).values({ nonce, expiresAt }));
 }

@@ -5,7 +5,6 @@ export const noncesTable = sqliteTable(
   {
     nonce: text('nonce').primaryKey(),
     expiresAt: text('expires_at').notNull(),
-    usedAt: text('used_at'),
   },
   (table) => [index('lti_tool_nonces_expires_at_idx').on(table.expiresAt)],
 );

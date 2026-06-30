@@ -10,7 +10,6 @@ export const LAUNCH_CONFIG_CACHE = new LRUCache<
 });
 
 export const SESSION_TTL = 60 * 60 * 24; // session ttl is one day
-export const NONCE_TTL = 60 * 15; // nonce ttl is fifteen minutes
 
 // we need an undefined value to handle cache misses and cache them
 export const undefinedLaunchConfigValue = Symbol('undefinedLaunchConfig');

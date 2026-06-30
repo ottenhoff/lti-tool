@@ -105,6 +105,9 @@ export type RelationalCleanupResult = {
   readonly registrationSessionsDeleted: number;
 };
 
+/** Default nonce TTL for relational storage adapters (15 minutes). */
+export const DEFAULT_NONCE_TTL_SECONDS = 60 * 15;
+
 export type RelationalStorageDialect = {
   readonly name: string;
   readonly sessionTtlSeconds: number;
@@ -122,7 +125,7 @@ export type RelationalStorageDialect = {
     session: LTISession,
     expiresAt: Date | string,
   ) => Promise<void>;
-  readonly validateNonce: (nonce: string) => Promise<boolean>;
+  readonly claimNonce: (nonce: string, expiresAt: Date | string) => Promise<boolean>;
   readonly serializeDate: (date: Date) => Date | string;
   readonly setRegistrationSession: (
     sessionId: string,
@@ -323,10 +326,18 @@ export class RelationalStorage implements LTIStorage {
     this.logger.debug({ clientId, deploymentId }, 'deployment deleted');
   }
 
-  validateNonce(nonce: string): Promise<boolean> {
+  async validateNonce(nonce: string): Promise<boolean> {
     this.logger.debug({ nonce }, 'validating nonce');
 
-    return this.dialect.validateNonce(nonce);
+    const expiresAt = this.dialect.serializeDate(
+      new Date(Date.now() + DEFAULT_NONCE_TTL_SECONDS * 1000),
+    );
+    const claimed = await this.dialect.claimNonce(nonce, expiresAt);
+    if (!claimed) {
+      this.logger.warn({ nonce }, 'nonce already used');
+    }
+
+    return claimed;
   }
 
   async getSession(sessionId: string): Promise<LTISession | undefined> {
@@ -528,31 +539,6 @@ export function resolveStorageLogger(logger: Logger | undefined): Logger {
 
 export async function executePromiseMutation(query: MutationQuery): Promise<void> {
   await Promise.resolve(query);
-}
-
-export type SelectThenInsertNonceConfig<TDb> = {
-  readonly nonceTtlSeconds: number;
-  readonly isDuplicateKeyError: (error: unknown) => boolean;
-  readonly selectExistingNonce: (db: TDb, nonce: string) => Promise<unknown | undefined>;
-  readonly insertNonce: (db: TDb, nonce: string, expiresAt: Date) => Promise<unknown>;
-};
-
-export async function validateNonceSelectThenInsert<TDb>(
-  db: TDb,
-  nonce: string,
-  config: SelectThenInsertNonceConfig<TDb>,
-): Promise<boolean> {
-  const existing = await config.selectExistingNonce(db, nonce);
-  if (existing) return false;
-
-  const expiresAt = new Date(Date.now() + config.nonceTtlSeconds * 1000);
-  try {
-    await config.insertNonce(db, nonce, expiresAt);
-    return true;
-  } catch (error: unknown) {
-    if (config.isDuplicateKeyError(error)) return false;
-    throw error;
-  }
 }
 
 function projectClient(client: ClientRow): Omit<LTIClient, 'deployments'> {
