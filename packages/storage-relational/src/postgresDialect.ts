@@ -1,7 +1,8 @@
-import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
 import { lte } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+
+import type { LTIDynamicRegistrationSession } from '../../core/src/index.js';
 
 import {
   DEFAULT_NONCE_TTL_SECONDS,

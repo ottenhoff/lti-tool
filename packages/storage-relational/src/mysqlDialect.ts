@@ -1,7 +1,8 @@
-import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
 import { lte } from 'drizzle-orm';
 import type { MySqlTable } from 'drizzle-orm/mysql-core';
 import type { MySql2Database } from 'drizzle-orm/mysql2';
+
+import type { LTIDynamicRegistrationSession } from '../../core/src/index.js';
 
 import {
   DEFAULT_NONCE_TTL_SECONDS,

@@ -15,7 +15,7 @@ Shared modules in this package:
 - `relationalStorage.ts` — shared `LTIStorage` implementation
 - `schemaDefinitions.ts` — shared physical table/column/index names, exposed as `#storage/schema-definitions`
 - `deploymentRow.ts` / `storageRows.ts` — row mapping helpers
-- `mysqlDialect.ts` / `postgresDialect.ts` — SQL adapter dialect hooks
+- `d1Dialect.ts` / `mysqlDialect.ts` / `postgresDialect.ts` — SQL adapter dialect hooks
 
 Regression coverage:
 

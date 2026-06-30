@@ -1,3 +1,6 @@
+import { and, eq, gt, type AnyColumn } from 'drizzle-orm';
+import type { Logger } from 'pino';
+
 import type {
   LTIClient,
   LTIDeployment,
@@ -5,9 +8,7 @@ import type {
   LTILaunchConfig,
   LTISession,
   LTIStorage,
-} from '@longsightgroup/lti-tool';
-import { and, eq, gt, type AnyColumn } from 'drizzle-orm';
-import type { Logger } from 'pino';
+} from '../../core/src/index.js';
 
 import {
   mapDeploymentRow,
@@ -568,5 +569,6 @@ export async function executePromiseMutation(query: PromiseLike<unknown>): Promi
   await Promise.resolve(query);
 }
 
+export { createD1Dialect } from './d1Dialect.js';
 export { createMySqlDialect, getMySqlAffectedRows } from './mysqlDialect.js';
 export { createPostgresDialect } from './postgresDialect.js';
