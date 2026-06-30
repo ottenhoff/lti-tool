@@ -1,10 +1,11 @@
-import type {
-  LTIClient,
-  LTIDeployment,
-  LTIDynamicRegistrationSession,
-  LTILaunchConfig,
-  LTISession,
-  LTIStorage,
+import {
+  createNoopLogger,
+  type LTIClient,
+  type LTIDeployment,
+  type LTIDynamicRegistrationSession,
+  type LTILaunchConfig,
+  type LTISession,
+  type LTIStorage,
 } from '@longsightgroup/lti-tool';
 import type { Logger } from 'pino';
 
@@ -42,14 +43,7 @@ export class MemoryStorage implements LTIStorage {
   private logger: Logger;
 
   constructor(config?: MemoryStorageConfig) {
-    this.logger =
-      config?.logger ??
-      ({
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      } as unknown as Logger);
+    this.logger = config?.logger ?? createNoopLogger();
   }
 
   // oxlint-disable-next-line require-await

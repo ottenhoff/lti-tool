@@ -11,13 +11,14 @@ import {
   QueryCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import type {
-  LTIClient,
-  LTIDeployment,
-  LTIDynamicRegistrationSession,
-  LTILaunchConfig,
-  LTISession,
-  LTIStorage,
+import {
+  createNoopLogger,
+  type LTIClient,
+  type LTIDeployment,
+  type LTIDynamicRegistrationSession,
+  type LTILaunchConfig,
+  type LTISession,
+  type LTIStorage,
 } from '@longsightgroup/lti-tool';
 import type { Logger } from 'pino';
 
@@ -51,14 +52,7 @@ export class DynamoDbStorage implements LTIStorage {
    * @param config - Configuration including table names and optional logger
    */
   constructor(config: DynamoDbStorageConfig) {
-    this.logger =
-      config?.logger ??
-      ({
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      } as unknown as Logger);
+    this.logger = config?.logger ?? createNoopLogger();
     this.controlPlaneTable = config.controlPlaneTable;
     this.dataPlaneTable = config.dataPlaneTable;
     this.launchConfigTable = config.launchConfigTable;

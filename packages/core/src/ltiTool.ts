@@ -73,6 +73,7 @@ import {
   verifyLtiLaunch,
 } from './utils/ltiLaunchVerification.js';
 import { buildLtiLoginAuthUrl } from './utils/ltiLogin.js';
+import { createNoopLogger } from './utils/noopLogger.js';
 import { normalizeLtiNrpsMembersResponse } from './utils/nrps.js';
 
 export type { LtiLaunchRegistrationInput, LtiLaunchRegistrationUpsertResult };
@@ -181,14 +182,7 @@ export class LTITool {
    * @param config - Configuration object containing secrets, keys, and storage adapter
    */
   constructor(private config: LTIConfig) {
-    this.logger =
-      config.logger ??
-      ({
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      } as unknown as Logger);
+    this.logger = config.logger ?? createNoopLogger();
 
     this.tokenService = new TokenService(
       this.config.keyPair,

@@ -1,13 +1,14 @@
 import { and, eq, gt, type AnyColumn } from 'drizzle-orm';
 import type { Logger } from 'pino';
 
-import type {
-  LTIClient,
-  LTIDeployment,
-  LTIDynamicRegistrationSession,
-  LTILaunchConfig,
-  LTISession,
-  LTIStorage,
+import {
+  createNoopLogger,
+  type LTIClient,
+  type LTIDeployment,
+  type LTIDynamicRegistrationSession,
+  type LTILaunchConfig,
+  type LTISession,
+  type LTIStorage,
 } from '../../core/src/index.js';
 
 import {
@@ -554,15 +555,7 @@ export class RelationalStorage implements LTIStorage {
 }
 
 export function resolveStorageLogger(logger: Logger | undefined): Logger {
-  return (
-    logger ??
-    ({
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-    } as unknown as Logger)
-  );
+  return logger ?? createNoopLogger();
 }
 
 export async function executePromiseMutation(query: PromiseLike<unknown>): Promise<void> {
