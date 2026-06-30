@@ -23,16 +23,17 @@ npm install @longsightgroup/lti-tool
 ## Quick Start
 
 ```typescript
-import { LTITool } from '@longsightgroup/lti-tool';
+import { LTITool, upsertLaunchRegistration } from '@longsightgroup/lti-tool';
 import { MemoryStorage } from '@longsightgroup/lti-tool/storage/memory';
 
+const storage = new MemoryStorage();
 const ltiTool = new LTITool({
   stateSecret: new TextEncoder().encode('your-secret-key'),
   keyPair, // Your RSA keypair
-  storage: new MemoryStorage(),
+  storage,
 });
 
-await ltiTool.upsertLaunchRegistration({
+await upsertLaunchRegistration(storage, {
   name: 'Moodle Sandbox',
   iss: 'https://sandbox.moodledemo.net',
   clientId: 'your-client-id',
@@ -50,7 +51,7 @@ if (result.success) {
 }
 ```
 
-Use `upsertLaunchRegistration` whenever an LMS administrator gives you issuer, client ID, deployment ID, and OIDC endpoints. For self-service registration, use dynamic registration instead.
+Use `upsertLaunchRegistration` whenever an LMS administrator gives you issuer, client ID, deployment ID, and OIDC endpoints. For self-service registration, use `LtiDynamicRegistration`. Custom admin UIs that manage stored client or deployment records directly should call `LTIStorage` methods instead of `LTITool`.
 
 ## Persisted session JSON
 

@@ -1,4 +1,8 @@
-import { LTITool } from '@longsightgroup/lti-tool';
+import {
+  LtiDynamicRegistration,
+  LTITool,
+  type LTIConfig,
+} from '@longsightgroup/lti-tool';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { MemoryStorage } from '../../memory/src/index.js';
@@ -6,7 +10,7 @@ import { createLtiOptionalRouteDeps } from '../src/ltiRoutes/createLtiOptionalRo
 
 describe('createLtiOptionalRouteDeps', () => {
   let keyPair: CryptoKeyPair;
-  let ltiTool: LTITool;
+  let config: LTIConfig;
 
   beforeAll(async () => {
     keyPair = await crypto.subtle.generateKey(
@@ -22,15 +26,19 @@ describe('createLtiOptionalRouteDeps', () => {
   });
 
   beforeEach(() => {
-    ltiTool = new LTITool({
+    config = {
       keyPair,
       stateSecret: new TextEncoder().encode('test-state-secret-exactly32bytes'),
       storage: new MemoryStorage(),
-    });
+    };
   });
 
-  it('binds optional route deps from LTITool', async () => {
-    const deps = createLtiOptionalRouteDeps({ ltiTool });
+  it('binds optional route deps from protocol facades', async () => {
+    const ltiTool = new LTITool(config);
+    const deps = createLtiOptionalRouteDeps({
+      ltiTool,
+      dynamicRegistration: new LtiDynamicRegistration(config),
+    });
 
     await expect(deps.deepLink.getSession('missing-session')).resolves.toBeUndefined();
     expect(deps.initiateDynamicRegistration.initiateDynamicRegistration).toBeTypeOf(

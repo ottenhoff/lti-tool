@@ -1,4 +1,4 @@
-import type { LTITool } from '@longsightgroup/lti-tool';
+import type { LtiDynamicRegistration, LTITool } from '@longsightgroup/lti-tool';
 
 import type {
   LtiCompleteDynamicRegistrationRouteDeps,
@@ -9,6 +9,7 @@ import { createLtiRouteLogger, type LtiRouteLoggerOptions } from '../ltiRouteLog
 
 export type CreateLtiOptionalRouteDepsOptions = LtiRouteLoggerOptions & {
   ltiTool: LTITool;
+  dynamicRegistration: LtiDynamicRegistration;
 };
 
 export type LtiOptionalRouteDeps = {
@@ -18,16 +19,19 @@ export type LtiOptionalRouteDeps = {
 };
 
 /**
- * Binds optional LTI route dependencies from an {@link LTITool} instance.
+ * Binds optional LTI route dependencies from core protocol facades.
  *
  * Use with `deepLinkRouteHandler`, `initiateDynamicRegistrationRouteHandler`, and
  * `completeDynamicRegistrationRouteHandler` after mounting required routes via
  * {@link createLtiRoutes}.
+ *
+ * Deep linking response creation is app-owned: call
+ * `ltiTool.createAdvantage(session).createDeepLinkingResponse(contentItems)` from your route.
  */
 export function createLtiOptionalRouteDeps(
   options: CreateLtiOptionalRouteDepsOptions,
 ): LtiOptionalRouteDeps {
-  const { ltiTool } = options;
+  const { dynamicRegistration, ltiTool } = options;
   const logger = createLtiRouteLogger(options);
 
   return {
@@ -37,11 +41,12 @@ export function createLtiOptionalRouteDeps(
     },
     initiateDynamicRegistration: {
       initiateDynamicRegistration: (request, routePath) =>
-        ltiTool.initiateDynamicRegistration(request, routePath),
+        dynamicRegistration.initiateDynamicRegistration(request, routePath),
       logger,
     },
     completeDynamicRegistration: {
-      completeDynamicRegistration: (form) => ltiTool.completeDynamicRegistration(form),
+      completeDynamicRegistration: (form) =>
+        dynamicRegistration.completeDynamicRegistration(form),
       logger,
     },
   };

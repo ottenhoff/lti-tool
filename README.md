@@ -35,7 +35,7 @@ This example wires up the three endpoints every LTI 1.3 tool needs, registers a 
 
 ```typescript
 import { Hono } from 'hono';
-import { LTITool } from '@longsightgroup/lti-tool';
+import { LTITool, upsertLaunchRegistration } from '@longsightgroup/lti-tool';
 import { createLtiRoutes, secureLTISession } from '@longsightgroup/lti-tool/hono';
 import { MemoryStorage } from '@longsightgroup/lti-tool/storage/memory';
 
@@ -58,7 +58,7 @@ const ltiConfig = {
 
 const ltiTool = new LTITool(ltiConfig);
 
-await ltiTool.upsertLaunchRegistration({
+await upsertLaunchRegistration(ltiConfig.storage, {
   name: 'Moodle Sandbox',
   iss: 'https://sandbox.moodledemo.net',
   clientId: 'your-client-id',
@@ -119,7 +119,7 @@ The library verifies the ID token signature against the platform JWKS, validates
 Every launch needs a stored client (platform) and deployment (tool installation). Pass the values your LMS administrator gives you in one call:
 
 ```typescript
-await ltiTool.upsertLaunchRegistration({
+await upsertLaunchRegistration(ltiConfig.storage, {
   name: 'Moodle Sandbox',
   iss: 'https://sandbox.moodledemo.net',
   clientId: 'your-client-id',
@@ -132,7 +132,7 @@ await ltiTool.upsertLaunchRegistration({
 
 `upsertLaunchRegistration` creates or updates the client and deployment, then refreshes the cached launch config used during launch verification. Call it again when endpoints or deployment metadata change.
 
-For self-service administrator registration, use dynamic registration (`initiateDynamicRegistration` / `completeDynamicRegistration`) instead of hand-copying IDs.
+For self-service administrator registration, use `LtiDynamicRegistration` instead of hand-copying IDs.
 
 ## Package exports
 
@@ -202,12 +202,25 @@ You can also use the core `LTITool` class directly without Hono — call `handle
 
 ## LTI Advantage services
 
-Once you have a session, `LTITool` can call platform services on the user's behalf:
+Once you have a session, create a session-bound Advantage facade:
+
+```typescript
+const advantage = ltiTool.createAdvantage(session);
+await advantage.submitScore(score);
+const roster = await advantage.getMembers();
+const deepLink = await advantage.createDeepLinkingResponse(contentItems);
+if (deepLink.success) {
+  // deepLink.data is the auto-submit HTML form
+}
+```
+
+`LtiAdvantage` can call platform services on the user's behalf:
 
 - **AGS** — submit scores, manage line items, read results (`submitScore`, `createLineItem`, `getResults`, and related methods)
 - **NRPS** — fetch course membership (`getMembers`)
 - **Deep linking** — return content items to the platform (`createDeepLinkingResponse`)
-- **Dynamic registration** — let administrators register the tool without manual JSON exchange (`initiateDynamicRegistration`, `completeDynamicRegistration`)
+
+Use `LtiDynamicRegistration` for administrator self-service registration.
 
 Service availability depends on what the platform enabled for the deployment. Helper functions like `isLtiAgsAvailable` and `isLtiNrpsAvailable` inspect the session claims.
 

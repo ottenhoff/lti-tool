@@ -88,9 +88,12 @@ Mount deep linking and dynamic registration with their explicit route handlers w
 
 ### createLtiOptionalRouteDeps(options)
 
-Binds dependency objects for optional routes from an existing `LTITool` instance. Pass the same `logger` you use with `createLtiRoutes` when you want route-level error logging.
+Binds dependency objects for optional routes from `LTITool` and `LtiDynamicRegistration` instances. Pass the same `logger` you use with `createLtiRoutes` when you want route-level error logging.
+
+Deep linking response creation is app-owned: call `ltiTool.createAdvantage(session).createDeepLinkingResponse(contentItems)` from your route handler.
 
 ```typescript
+import { LtiDynamicRegistration } from '@longsightgroup/lti-tool';
 import {
   completeDynamicRegistrationRouteHandler,
   createLtiOptionalRouteDeps,
@@ -101,7 +104,12 @@ import {
 
 app.route('/lti', createLtiRoutes({ ltiTool, logger }));
 
-const optionalRoutes = createLtiOptionalRouteDeps({ ltiTool, logger });
+const dynamicRegistration = new LtiDynamicRegistration(ltiConfig);
+const optionalRoutes = createLtiOptionalRouteDeps({
+  ltiTool,
+  dynamicRegistration,
+  logger,
+});
 
 app.get('/lti/deep-linking', deepLinkRouteHandler(optionalRoutes.deepLink));
 app.get(

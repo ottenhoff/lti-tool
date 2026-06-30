@@ -1,5 +1,6 @@
 import type {
   DynamicRegistrationForm,
+  LtiDynamicRegistration,
   LtiLaunchVerificationResult,
   LtiVerifiedLaunch,
   LTISession,
@@ -33,14 +34,14 @@ export type LtiInitiateDynamicRegistrationRouteDeps = {
   initiateDynamicRegistration: (
     request: RegistrationRequest,
     routePath: string,
-  ) => ReturnType<LTITool['initiateDynamicRegistration']>;
+  ) => ReturnType<LtiDynamicRegistration['initiateDynamicRegistration']>;
   logger: Logger;
 };
 
 export type LtiCompleteDynamicRegistrationRouteDeps = {
   completeDynamicRegistration: (
     form: DynamicRegistrationForm,
-  ) => ReturnType<LTITool['completeDynamicRegistration']>;
+  ) => ReturnType<LtiDynamicRegistration['completeDynamicRegistration']>;
   logger: Logger;
 };
 

@@ -1,13 +1,14 @@
 import { generateKeyPair } from 'jose';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   LTI_AGS_SCOPE_LINEITEM,
   LTI_AGS_SCOPE_LINEITEM_READONLY,
   LTI_AGS_SCOPE_RESULT_READONLY,
   LTI_AGS_SCOPE_SCORE,
-  LtiServiceError,
+  LtiDynamicRegistration,
   LTITool,
+  type LTILaunchConfig,
   type LTIStorage,
   type LTISession,
 } from '../src/index.js';
@@ -15,6 +16,15 @@ import type { CreateLineItem } from '../src/schemas/lti13/ags/lineItem.schema.js
 import type { ScoreSubmission } from '../src/schemas/lti13/ags/scoreSubmission.schema.js';
 import type { DynamicRegistrationForm } from '../src/schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
 import type { RegistrationRequest } from '../src/schemas/lti13/dynamicRegistration/registrationRequest.schema.js';
+
+const launchConfig: LTILaunchConfig = {
+  iss: 'https://platform.example.com',
+  clientId: 'client123',
+  deploymentId: 'deployment123',
+  authUrl: 'https://platform.example.com/auth',
+  tokenUrl: 'https://platform.example.com/token',
+  jwksUrl: 'https://platform.example.com/jwks',
+};
 
 const createMockStorage = (): LTIStorage =>
   ({
@@ -31,7 +41,7 @@ const createMockStorage = (): LTIStorage =>
     getSession: vi.fn(),
     addSession: vi.fn(),
     validateNonce: vi.fn(),
-    getLaunchConfig: vi.fn(),
+    getLaunchConfig: vi.fn().mockResolvedValue(launchConfig),
     saveLaunchConfig: vi.fn(),
     deleteRegistrationSession: vi.fn(),
     getRegistrationSession: vi.fn(),
@@ -40,6 +50,11 @@ const createMockStorage = (): LTIStorage =>
 
 const session = {
   id: 'session-1',
+  platform: {
+    issuer: launchConfig.iss,
+    clientId: launchConfig.clientId,
+    deploymentId: launchConfig.deploymentId,
+  },
   services: {
     ags: {
       lineitem: 'https://platform.example.com/ags/lineitems/1',
@@ -97,31 +112,40 @@ const results = [
   },
 ];
 
-const replaceAgsService = (ltiTool: LTITool, agsService: unknown): void => {
-  (
-    ltiTool as unknown as {
-      platformServices: { agsService: unknown };
-    }
-  ).platformServices.agsService = agsService;
+type RecordedFetchRequest = {
+  readonly url: string;
+  readonly init?: RequestInit;
 };
 
-const replaceNrpsService = (ltiTool: LTITool, nrpsService: unknown): void => {
-  (
-    ltiTool as unknown as {
-      platformServices: { nrpsService: unknown };
-    }
-  ).platformServices.nrpsService = nrpsService;
+const tokenResponse = (): Response => Response.json({ access_token: 'access-token' });
+
+const recordFetch = (responses: Response[]): RecordedFetchRequest[] => {
+  const requests: RecordedFetchRequest[] = [];
+  globalThis.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    requests.push({
+      url: input instanceof Request ? input.url : input.toString(),
+      init,
+    });
+    const response = responses.shift();
+    if (!response) throw new Error('Unexpected fetch call');
+    return Promise.resolve(response);
+  });
+
+  return requests;
 };
 
 describe('LTI service results', () => {
   let keyPair: CryptoKeyPair;
   let ltiTool: LTITool;
+  let originalFetch: typeof globalThis.fetch;
 
   beforeAll(async () => {
     keyPair = await generateKeyPair('RS256');
+    originalFetch = globalThis.fetch;
   });
 
   beforeEach(() => {
+    globalThis.fetch = originalFetch;
     ltiTool = new LTITool({
       keyPair,
       stateSecret: new TextEncoder().encode('test-state-secret-exactly32bytes'),
@@ -129,34 +153,36 @@ describe('LTI service results', () => {
     });
   });
 
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   it('returns structured success for AGS score submission', async () => {
     const response = new Response(null, { status: 204 });
-    replaceAgsService(ltiTool, {
-      submitScore: vi.fn().mockResolvedValue(response),
-    });
+    const requests = recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(session);
 
-    const result = await ltiTool.submitScore(session, score);
+    const result = await advantage.submitScore(score);
 
     expect(result).toEqual({
       success: true,
       data: undefined,
       response,
     });
+    expect(requests[1]?.url).toBe('https://platform.example.com/ags/lineitems/1/scores');
   });
 
   it('returns a missing scope error before AGS score submission', async () => {
-    const result = await ltiTool.submitScore(
-      {
-        ...session,
-        services: {
-          ags: {
-            lineitem: 'https://platform.example.com/ags/lineitems/1',
-            scopes: [],
-          },
+    const advantage = ltiTool.createAdvantage({
+      ...session,
+      services: {
+        ags: {
+          lineitem: 'https://platform.example.com/ags/lineitems/1',
+          scopes: [],
         },
-      } as LTISession,
-      score,
-    );
+      },
+    } as LTISession);
+    const result = await advantage.submitScore(score);
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected detailed service failure');
@@ -169,22 +195,15 @@ describe('LTI service results', () => {
   });
 
   it('classifies token failures from service calls', async () => {
-    replaceAgsService(ltiTool, {
-      submitScore: vi.fn().mockRejectedValue(
-        new LtiServiceError({
-          code: 'token_request_failed',
-          serviceKind: 'token',
-          operation: 'getBearerToken',
-          message: 'Token request failed: 401 Unauthorized',
-          endpointType: 'token',
-          status: 401,
-          statusText: 'Unauthorized',
-          responseBodySummary: '{"error":"invalid_client"}',
-        }),
+    recordFetch([
+      Response.json(
+        { error: 'invalid_client' },
+        { status: 401, statusText: 'Unauthorized' },
       ),
-    });
+    ]);
+    const advantage = ltiTool.createAdvantage(session);
 
-    const result = await ltiTool.submitScore(session, score);
+    const result = await advantage.submitScore(score);
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected detailed service failure');
@@ -200,10 +219,10 @@ describe('LTI service results', () => {
 
   it('returns structured success for AGS line item listing', async () => {
     const response = Response.json([lineItem]);
-    const listLineItems = vi.fn().mockResolvedValue(response);
-    replaceAgsService(ltiTool, { listLineItems });
+    const requests = recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.listLineItems(lineItemsSession, {
+    const result = await advantage.listLineItems({
       resourceId: 'quiz-1',
     });
 
@@ -211,39 +230,31 @@ describe('LTI service results', () => {
     if (!result.success) throw new Error('Expected detailed service success');
     expect(result.data).toEqual([lineItem]);
     expect(result.response).toBe(response);
-    expect(listLineItems).toHaveBeenCalledWith(
-      lineItemsSession,
-      'https://platform.example.com/ags/lineitems',
-      {
-        resourceId: 'quiz-1',
-      },
+    expect(requests[1]?.url).toBe(
+      'https://platform.example.com/ags/lineitems?resource_id=quiz-1',
     );
   });
 
   it('returns structured success for AGS score retrieval', async () => {
     const response = Response.json(results);
-    const getScores = vi.fn().mockResolvedValue(response);
-    replaceAgsService(ltiTool, { getScores });
+    const requests = recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.getScores(lineItemsSession);
+    const result = await advantage.getScores();
 
     expect(result.success).toBe(true);
     if (!result.success) throw new Error('Expected service success');
     expect(result.data).toEqual(results);
     expect(result.response).toBe(response);
-    expect(getScores).toHaveBeenCalledWith(
-      lineItemsSession,
-      'https://platform.example.com/ags/lineitems/1',
-      {},
-    );
+    expect(requests[1]?.url).toBe('https://platform.example.com/ags/lineitems/1/results');
   });
 
   it('returns structured success for AGS line item retrieval', async () => {
     const response = Response.json(lineItem);
-    const getLineItem = vi.fn().mockResolvedValue(response);
-    replaceAgsService(ltiTool, { getLineItem });
+    const requests = recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.getLineItem(lineItemsSession, {
+    const result = await advantage.getLineItem({
       lineItemUrl: 'https://platform.example.com/ags/lineitems/1',
     });
 
@@ -251,36 +262,29 @@ describe('LTI service results', () => {
     if (!result.success) throw new Error('Expected detailed service success');
     expect(result.data).toEqual(lineItem);
     expect(result.response).toBe(response);
-    expect(getLineItem).toHaveBeenCalledWith(
-      lineItemsSession,
-      'https://platform.example.com/ags/lineitems/1',
-    );
+    expect(requests[1]?.url).toBe('https://platform.example.com/ags/lineitems/1');
   });
 
   it('returns structured success for AGS line item creation', async () => {
     const response = Response.json(lineItem);
-    const createLineItemMock = vi.fn().mockResolvedValue(response);
-    replaceAgsService(ltiTool, { createLineItem: createLineItemMock });
+    const requests = recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.createLineItem(lineItemsSession, createLineItem);
+    const result = await advantage.createLineItem(createLineItem);
 
     expect(result.success).toBe(true);
     if (!result.success) throw new Error('Expected detailed service success');
     expect(result.data).toEqual(lineItem);
     expect(result.response).toBe(response);
-    expect(createLineItemMock).toHaveBeenCalledWith(
-      lineItemsSession,
-      'https://platform.example.com/ags/lineitems',
-      createLineItem,
-    );
+    expect(requests[1]?.url).toBe('https://platform.example.com/ags/lineitems');
   });
 
   it('returns structured success for AGS line item update', async () => {
     const response = Response.json(lineItem);
-    const updateLineItem = vi.fn().mockResolvedValue(response);
-    replaceAgsService(ltiTool, { updateLineItem });
+    recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.updateLineItem(lineItemsSession, {
+    const result = await advantage.updateLineItem({
       label: 'Quiz 1',
       scoreMaximum: 10,
     });
@@ -293,10 +297,10 @@ describe('LTI service results', () => {
 
   it('returns structured success for AGS line item deletion', async () => {
     const response = new Response(null, { status: 204 });
-    const deleteLineItem = vi.fn().mockResolvedValue(response);
-    replaceAgsService(ltiTool, { deleteLineItem });
+    recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.deleteLineItem(lineItemsSession);
+    const result = await advantage.deleteLineItem();
 
     expect(result).toEqual({
       success: true,
@@ -306,7 +310,7 @@ describe('LTI service results', () => {
   });
 
   it('returns a missing scope error before AGS line item listing', async () => {
-    const result = await ltiTool.listLineItems({
+    const advantage = ltiTool.createAdvantage({
       ...lineItemsSession,
       services: {
         ags: {
@@ -315,6 +319,7 @@ describe('LTI service results', () => {
         },
       },
     } as LTISession);
+    const result = await advantage.listLineItems();
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected detailed service failure');
@@ -327,11 +332,10 @@ describe('LTI service results', () => {
   });
 
   it('classifies invalid AGS line item platform responses', async () => {
-    replaceAgsService(ltiTool, {
-      getLineItem: vi.fn().mockResolvedValue(Response.json({ label: 'Quiz 1' })),
-    });
+    recordFetch([tokenResponse(), Response.json({ label: 'Quiz 1' })]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.getLineItem(lineItemsSession);
+    const result = await advantage.getLineItem();
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected detailed service failure');
@@ -343,7 +347,7 @@ describe('LTI service results', () => {
   });
 
   it('returns a missing scope error before AGS score retrieval', async () => {
-    const result = await ltiTool.getScores({
+    const advantage = ltiTool.createAdvantage({
       ...lineItemsSession,
       services: {
         ags: {
@@ -352,6 +356,7 @@ describe('LTI service results', () => {
         },
       },
     } as LTISession);
+    const result = await advantage.getScores();
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected service failure');
@@ -363,11 +368,10 @@ describe('LTI service results', () => {
   });
 
   it('classifies invalid AGS score platform responses', async () => {
-    replaceAgsService(ltiTool, {
-      getScores: vi.fn().mockResolvedValue(Response.json({ resultScore: 9 })),
-    });
+    recordFetch([tokenResponse(), Response.json({ resultScore: 9 })]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.getScores(lineItemsSession);
+    const result = await advantage.getScores();
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected service failure');
@@ -379,22 +383,13 @@ describe('LTI service results', () => {
   });
 
   it('classifies AGS line item service failures', async () => {
-    replaceAgsService(ltiTool, {
-      createLineItem: vi.fn().mockRejectedValue(
-        new LtiServiceError({
-          code: 'platform_request_failed',
-          serviceKind: 'ags',
-          operation: 'createLineItem',
-          message: 'AGS create line item failed: 502 Bad Gateway',
-          endpointType: 'ags',
-          status: 502,
-          statusText: 'Bad Gateway',
-          responseBodySummary: 'upstream unavailable',
-        }),
-      ),
-    });
+    recordFetch([
+      tokenResponse(),
+      new Response('upstream unavailable', { status: 502, statusText: 'Bad Gateway' }),
+    ]);
+    const advantage = ltiTool.createAdvantage(lineItemsSession);
 
-    const result = await ltiTool.createLineItem(lineItemsSession, createLineItem);
+    const result = await advantage.createLineItem(createLineItem);
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected detailed service failure');
@@ -409,24 +404,24 @@ describe('LTI service results', () => {
   });
 
   it('returns normalized NRPS members on success', async () => {
-    replaceNrpsService(ltiTool, {
-      getMembers: vi.fn().mockResolvedValue(
-        Response.json({
-          id: 'https://platform.example.com/nrps/members',
-          context: { id: 'course-1' },
-          members: [
-            {
-              status: 'Active',
-              name: 'Ada Lovelace',
-              user_id: 'user-1',
-              roles: [],
-            },
-          ],
-        }),
-      ),
-    });
+    recordFetch([
+      tokenResponse(),
+      Response.json({
+        id: 'https://platform.example.com/nrps/members',
+        context: { id: 'course-1' },
+        members: [
+          {
+            status: 'Active',
+            name: 'Ada Lovelace',
+            user_id: 'user-1',
+            roles: [],
+          },
+        ],
+      }),
+    ]);
+    const advantage = ltiTool.createAdvantage(session);
 
-    const result = await ltiTool.getMembers(session);
+    const result = await advantage.getMembers();
 
     expect(result.success).toBe(true);
     if (!result.success) throw new Error('Expected detailed service success');
@@ -441,11 +436,10 @@ describe('LTI service results', () => {
   });
 
   it('classifies invalid NRPS platform responses', async () => {
-    replaceNrpsService(ltiTool, {
-      getMembers: vi.fn().mockResolvedValue(Response.json({ members: [{}] })),
-    });
+    recordFetch([tokenResponse(), Response.json({ members: [{}] })]);
+    const advantage = ltiTool.createAdvantage(session);
 
-    const result = await ltiTool.getMembers(session);
+    const result = await advantage.getMembers();
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected detailed service failure');
@@ -465,12 +459,20 @@ describe('LTI service results', () => {
       sessionToken: 'session-token-123',
     };
 
-    const fetchResult = await ltiTool.fetchPlatformConfiguration(registrationRequest);
-    const initiateResult = await ltiTool.initiateDynamicRegistration(
+    const dynamicRegistration = new LtiDynamicRegistration({
+      keyPair,
+      stateSecret: new TextEncoder().encode('test-state-secret-exactly32bytes'),
+      storage: createMockStorage(),
+    });
+
+    const fetchResult =
+      await dynamicRegistration.fetchPlatformConfiguration(registrationRequest);
+    const initiateResult = await dynamicRegistration.initiateDynamicRegistration(
       registrationRequest,
       '/lti/register',
     );
-    const completeResult = await ltiTool.completeDynamicRegistration(registrationForm);
+    const completeResult =
+      await dynamicRegistration.completeDynamicRegistration(registrationForm);
 
     expect(fetchResult.success).toBe(false);
     if (fetchResult.success) throw new Error('Expected service failure');

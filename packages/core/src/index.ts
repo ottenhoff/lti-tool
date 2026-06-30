@@ -99,11 +99,14 @@ export {
   serializeLtiSession,
 } from './utils/ltiSessionCodecs.js';
 export type { LtiDynamicRegistrationCompletionResult } from './services/dynamicRegistration.service.js';
+export { LTITool } from './ltiTool.js';
+export { LtiAdvantage, type LtiAdvantageInput } from './ltiAdvantage.js';
+export { LtiDynamicRegistration } from './ltiDynamicRegistration.js';
 export {
-  LTITool,
+  upsertLaunchRegistration,
   type LtiLaunchRegistrationInput,
   type LtiLaunchRegistrationUpsertResult,
-} from './ltiTool.js';
+} from './launchRegistration.js';
 
 export {
   formatLtiServiceError,

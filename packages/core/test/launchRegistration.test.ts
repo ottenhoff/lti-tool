@@ -1,5 +1,4 @@
-import { generateKeyPair } from 'jose';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import type {
   LTIClient,
@@ -9,7 +8,7 @@ import type {
   LTISession,
   LTIStorage,
 } from '../src/interfaces/index.js';
-import { LTITool } from '../src/ltiTool.js';
+import { upsertLaunchRegistration } from '../src/launchRegistration.js';
 
 class RecordingStorage implements LTIStorage {
   readonly launchConfigs: LTILaunchConfig[] = [];
@@ -154,22 +153,11 @@ class RecordingStorage implements LTIStorage {
   }
 }
 
-describe('LTITool launch registration upsert', () => {
-  let keyPair: CryptoKeyPair;
+describe('launch registration upsert', () => {
   let storage: RecordingStorage;
-  let ltiTool: LTITool;
-
-  beforeAll(async () => {
-    keyPair = await generateKeyPair('RS256');
-  });
 
   beforeEach(() => {
     storage = new RecordingStorage();
-    ltiTool = new LTITool({
-      keyPair,
-      stateSecret: new TextEncoder().encode('test-state-secret-exactly32bytes'),
-      storage,
-    });
   });
 
   it('creates client, deployment, and launch config from platform identifiers', async () => {
@@ -182,7 +170,7 @@ describe('LTITool launch registration upsert', () => {
       jwksUrl: 'https://platform.example.com/jwks',
     };
 
-    const result = await ltiTool.upsertLaunchRegistration(input);
+    const result = await upsertLaunchRegistration(storage, input);
 
     await expect(storage.listClients()).resolves.toEqual([
       {
@@ -219,7 +207,7 @@ describe('LTITool launch registration upsert', () => {
   });
 
   it('updates existing client endpoints and matches deployment by platform ID', async () => {
-    const first = await ltiTool.upsertLaunchRegistration({
+    const first = await upsertLaunchRegistration(storage, {
       iss: 'https://platform.example.com',
       clientId: 'oauth-client-id',
       deploymentId: 'platform-deployment-id',
@@ -230,7 +218,7 @@ describe('LTITool launch registration upsert', () => {
       deploymentName: 'Existing Deployment',
     });
 
-    const result = await ltiTool.upsertLaunchRegistration({
+    const result = await upsertLaunchRegistration(storage, {
       iss: 'https://platform.example.com',
       clientId: 'oauth-client-id',
       deploymentId: 'platform-deployment-id',

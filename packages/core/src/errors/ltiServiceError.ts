@@ -7,7 +7,12 @@ export type LtiServiceErrorCode =
   | 'platform_request_failed'
   | 'platform_response_invalid';
 
-export type LtiServiceKind = 'ags' | 'nrps' | 'token' | 'dynamic_registration';
+export type LtiServiceKind =
+  | 'ags'
+  | 'nrps'
+  | 'token'
+  | 'dynamic_registration'
+  | 'deep_linking';
 
 export interface LtiServiceErrorInput {
   code: LtiServiceErrorCode;
