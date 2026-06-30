@@ -11,22 +11,20 @@ import type { Logger } from 'pino';
 
 import {
   mapDeploymentRow,
+  toDeploymentInsertRow,
   toDeploymentUpdateRow,
   type DeploymentRow,
-} from '#storage/drizzle-deployment-row';
-
-type ClientRow = Omit<LTIClient, 'deployments'>;
-
-type SessionRow = {
-  readonly id: string;
-  readonly data: Omit<LTISession, 'id'>;
-};
-
-type RegistrationSessionRow = {
-  readonly data: LTIDynamicRegistrationSession;
-};
-
-type LaunchConfigRow = LTILaunchConfig;
+} from '../../storage-drizzle/src/deploymentRow.js';
+import {
+  parseRegistrationSessionDataRow,
+  parseSessionDataRow,
+  projectClient,
+  toSessionDataRow,
+  type ClientRow,
+  type LaunchConfigRow,
+  type RegistrationSessionDataRow,
+  type SessionDataRow,
+} from '../../storage-drizzle/src/storageRows.js';
 
 export type MutationQuery = PromiseLike<unknown>;
 
@@ -111,27 +109,14 @@ export const DEFAULT_NONCE_TTL_SECONDS = 60 * 15;
 export type RelationalStorageDialect = {
   readonly name: string;
   readonly sessionTtlSeconds: number;
-  readonly insertClient: (
-    client: Omit<LTIClient, 'id' | 'deployments'>,
-  ) => Promise<string>;
-  readonly insertDeployment: (
-    clientId: string,
-    deployment: Omit<LTIDeployment, 'id'>,
-  ) => Promise<string>;
+  readonly nonceTtlSeconds: number;
   readonly executeMutation?: (query: unknown) => Promise<unknown>;
-  readonly deleteClient: (clientId: string) => Promise<void>;
-  readonly requireExistingClientBeforeDelete?: boolean;
-  readonly insertSession: (
-    session: LTISession,
-    expiresAt: Date | string,
-  ) => Promise<void>;
-  readonly claimNonce: (nonce: string, expiresAt: Date | string) => Promise<boolean>;
-  readonly serializeDate: (date: Date) => Date | string;
+  readonly claimNonce: (nonce: string, expiresAt: number) => Promise<boolean>;
   readonly setRegistrationSession: (
     sessionId: string,
     session: LTIDynamicRegistrationSession,
   ) => Promise<void>;
-  readonly cleanup: (now: Date) => Promise<RelationalCleanupResult>;
+  readonly cleanup: (now: number) => Promise<RelationalCleanupResult>;
   readonly orderClients?: (schema: RelationalSchema) => readonly AnyColumn[];
 };
 
@@ -195,7 +180,8 @@ export class RelationalStorage implements LTIStorage {
   addClient(client: Omit<LTIClient, 'id' | 'deployments'>): Promise<string> {
     this.logger.info({ client }, 'adding client');
 
-    return this.dialect.insertClient(client);
+    const clientId = crypto.randomUUID();
+    return this.insertClient(clientId, client);
   }
 
   async updateClient(
@@ -220,15 +206,17 @@ export class RelationalStorage implements LTIStorage {
   async deleteClient(clientId: string): Promise<void> {
     this.logger.info({ clientId }, 'deleting client');
 
-    if (this.dialect.requireExistingClientBeforeDelete) {
-      const existing = await this.getClientById(clientId);
-      if (!existing) {
-        this.logger.warn({ clientId }, 'client not found for deletion');
-        return;
-      }
+    const existing = await this.getClientById(clientId);
+    if (!existing) {
+      this.logger.warn({ clientId }, 'client not found for deletion');
+      return;
     }
 
-    await this.dialect.deleteClient(clientId);
+    await this.executeMutation(
+      this.db
+        .delete(this.schema.clientsTable)
+        .where(eq(this.schema.clientsTable.id, clientId)),
+    );
 
     this.logger.debug({ clientId }, 'client and all deployments deleted');
   }
@@ -274,7 +262,8 @@ export class RelationalStorage implements LTIStorage {
   ): Promise<string> {
     this.logger.info({ clientId, deployment }, 'adding deployment');
 
-    return this.dialect.insertDeployment(clientId, deployment);
+    const deploymentInternalId = crypto.randomUUID();
+    return this.insertDeployment(deploymentInternalId, clientId, deployment);
   }
 
   async updateDeploymentById(
@@ -329,9 +318,7 @@ export class RelationalStorage implements LTIStorage {
   async validateNonce(nonce: string): Promise<boolean> {
     this.logger.debug({ nonce }, 'validating nonce');
 
-    const expiresAt = this.dialect.serializeDate(
-      new Date(Date.now() + DEFAULT_NONCE_TTL_SECONDS * 1000),
-    );
+    const expiresAt = Date.now() + this.dialect.nonceTtlSeconds * 1000;
     const claimed = await this.dialect.claimNonce(nonce, expiresAt);
     if (!claimed) {
       this.logger.warn({ nonce }, 'nonce already used');
@@ -344,12 +331,12 @@ export class RelationalStorage implements LTIStorage {
     this.logger.debug({ sessionId }, 'getting session');
 
     const [sessionRecord] = await this.db
-      .select<SessionRow>()
+      .select<SessionDataRow>()
       .from(this.schema.sessionsTable)
       .where(
         and(
           eq(this.schema.sessionsTable.id, sessionId),
-          gt(this.schema.sessionsTable.expiresAt, this.dialect.serializeDate(new Date())),
+          gt(this.schema.sessionsTable.expiresAt, Date.now()),
         ),
       )
       .limit(1);
@@ -359,19 +346,21 @@ export class RelationalStorage implements LTIStorage {
       return undefined;
     }
 
-    return {
-      id: sessionRecord.id,
-      ...sessionRecord.data,
-    };
+    return parseSessionDataRow(sessionRecord);
   }
 
   async addSession(session: LTISession): Promise<string> {
     this.logger.debug({ sessionId: session.id }, 'adding session');
 
-    const expiresAt = this.dialect.serializeDate(
-      new Date(Date.now() + this.dialect.sessionTtlSeconds * 1000),
+    const expiresAt = Date.now() + this.dialect.sessionTtlSeconds * 1000;
+    const row = toSessionDataRow(session);
+    await this.executeMutation(
+      this.db.insert(this.schema.sessionsTable).values({
+        id: row.id,
+        data: row.data,
+        expiresAt,
+      }),
     );
-    await this.dialect.insertSession(session, expiresAt);
 
     this.logger.debug({ sessionId: session.id }, 'session added');
     return session.id;
@@ -419,15 +408,12 @@ export class RelationalStorage implements LTIStorage {
     this.logger.debug({ sessionId }, 'getting registration session');
 
     const [record] = await this.db
-      .select<RegistrationSessionRow>()
+      .select<RegistrationSessionDataRow>()
       .from(this.schema.registrationSessionsTable)
       .where(
         and(
           eq(this.schema.registrationSessionsTable.id, sessionId),
-          gt(
-            this.schema.registrationSessionsTable.expiresAt,
-            this.dialect.serializeDate(new Date()),
-          ),
+          gt(this.schema.registrationSessionsTable.expiresAt, Date.now()),
         ),
       )
       .limit(1);
@@ -437,7 +423,7 @@ export class RelationalStorage implements LTIStorage {
       return undefined;
     }
 
-    return record.data;
+    return parseRegistrationSessionDataRow(record);
   }
 
   async deleteRegistrationSession(sessionId: string): Promise<void> {
@@ -455,7 +441,7 @@ export class RelationalStorage implements LTIStorage {
   async cleanup(): Promise<RelationalCleanupResult> {
     this.logger.info('starting cleanup of expired items');
 
-    const result = await this.dialect.cleanup(new Date());
+    const result = await this.dialect.cleanup(Date.now());
 
     this.logger.info(result, 'cleanup completed');
     return result;
@@ -490,6 +476,34 @@ export class RelationalStorage implements LTIStorage {
       .limit(1);
 
     return row;
+  }
+
+  private async insertClient(
+    clientId: string,
+    client: Omit<LTIClient, 'id' | 'deployments'>,
+  ): Promise<string> {
+    await this.executeMutation(
+      this.db.insert(this.schema.clientsTable).values({
+        id: clientId,
+        ...client,
+      }),
+    );
+    return clientId;
+  }
+
+  private async insertDeployment(
+    deploymentInternalId: string,
+    clientId: string,
+    deployment: Omit<LTIDeployment, 'id'>,
+  ): Promise<string> {
+    await this.executeMutation(
+      this.db.insert(this.schema.deploymentsTable).values({
+        id: deploymentInternalId,
+        clientId,
+        ...toDeploymentInsertRow(deployment),
+      }),
+    );
+    return deploymentInternalId;
   }
 
   private getDeploymentByInternalId(
@@ -539,16 +553,4 @@ export function resolveStorageLogger(logger: Logger | undefined): Logger {
 
 export async function executePromiseMutation(query: MutationQuery): Promise<void> {
   await Promise.resolve(query);
-}
-
-function projectClient(client: ClientRow): Omit<LTIClient, 'deployments'> {
-  return {
-    id: client.id,
-    name: client.name,
-    iss: client.iss,
-    clientId: client.clientId,
-    authUrl: client.authUrl,
-    tokenUrl: client.tokenUrl,
-    jwksUrl: client.jwksUrl,
-  };
 }

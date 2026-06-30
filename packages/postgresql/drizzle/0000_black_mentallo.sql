@@ -1,5 +1,5 @@
 CREATE TABLE "clients" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"id" varchar(36) PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"iss" varchar(255) NOT NULL,
 	"client_id" varchar(255) NOT NULL,
@@ -9,31 +9,31 @@ CREATE TABLE "clients" (
 );
 --> statement-breakpoint
 CREATE TABLE "deployments" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"id" varchar(36) PRIMARY KEY NOT NULL,
 	"deployment_id" varchar(255) NOT NULL,
 	"name" varchar(255),
 	"description" text,
-	"client_id" uuid NOT NULL
+	"client_id" varchar(36) NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "nonces" (
 	"nonce" varchar(255) PRIMARY KEY NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL
+	"expires_at" bigint NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "registration_sessions" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"id" varchar(36) PRIMARY KEY NOT NULL,
 	"data" jsonb NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL
+	"expires_at" bigint NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"id" varchar(36) PRIMARY KEY NOT NULL,
 	"data" jsonb NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL
+	"expires_at" bigint NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "deployments" ADD CONSTRAINT "deployments_client_id_clients_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."clients"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deployments" ADD CONSTRAINT "deployments_client_id_clients_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."clients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "issuer_client_idx" ON "clients" USING btree ("client_id","iss");--> statement-breakpoint
 CREATE UNIQUE INDEX "iss_client_id_unique" ON "clients" USING btree ("iss","client_id");--> statement-breakpoint
 CREATE INDEX "deployment_id_idx" ON "deployments" USING btree ("deployment_id");--> statement-breakpoint

@@ -11,7 +11,7 @@ export const deploymentsTable = mysqlTable(
     description: text(),
     clientId: varchar({ length: 36 })
       .notNull()
-      .references(() => clientsTable.id),
+      .references(() => clientsTable.id, { onDelete: 'cascade' }),
   },
   (table) => [
     index('deployment_id_idx').on(table.deploymentId),

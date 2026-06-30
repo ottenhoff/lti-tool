@@ -22,25 +22,25 @@ CREATE TABLE `deployments` (
 --> statement-breakpoint
 CREATE TABLE `nonces` (
 	`nonce` varchar(255) NOT NULL,
-	`expiresAt` datetime NOT NULL,
+	`expiresAt` bigint NOT NULL,
 	CONSTRAINT `nonces_nonce` PRIMARY KEY(`nonce`)
 );
 --> statement-breakpoint
 CREATE TABLE `registrationSessions` (
 	`id` varchar(36) NOT NULL,
 	`data` json NOT NULL,
-	`expiresAt` datetime NOT NULL,
+	`expiresAt` bigint NOT NULL,
 	CONSTRAINT `registrationSessions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id` varchar(36) NOT NULL,
 	`data` json NOT NULL,
-	`expiresAt` datetime NOT NULL,
+	`expiresAt` bigint NOT NULL,
 	CONSTRAINT `sessions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-ALTER TABLE `deployments` ADD CONSTRAINT `deployments_clientId_clients_id_fk` FOREIGN KEY (`clientId`) REFERENCES `clients`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `deployments` ADD CONSTRAINT `deployments_clientId_clients_id_fk` FOREIGN KEY (`clientId`) REFERENCES `clients`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX `issuer_client_idx` ON `clients` (`clientId`,`iss`);--> statement-breakpoint
 CREATE INDEX `deployment_id_idx` ON `deployments` (`deploymentId`);--> statement-breakpoint
 CREATE INDEX `expires_at_idx` ON `registrationSessions` (`expiresAt`);--> statement-breakpoint

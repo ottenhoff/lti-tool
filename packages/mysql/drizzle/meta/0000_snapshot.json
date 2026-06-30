@@ -132,7 +132,7 @@
           "tableTo": "clients",
           "columnsFrom": ["clientId"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -162,7 +162,7 @@
         },
         "expiresAt": {
           "name": "expiresAt",
-          "type": "datetime",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -198,7 +198,7 @@
         },
         "expiresAt": {
           "name": "expiresAt",
-          "type": "datetime",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -240,7 +240,7 @@
         },
         "expiresAt": {
           "name": "expiresAt",
-          "type": "datetime",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false

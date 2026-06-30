@@ -23,21 +23,21 @@ CREATE INDEX `lti_tool_deployments_deployment_id_idx` ON `lti_tool_deployments` 
 CREATE UNIQUE INDEX `lti_tool_deployments_client_deployment_unique` ON `lti_tool_deployments` (`client_id`,`deployment_id`);--> statement-breakpoint
 CREATE TABLE `lti_tool_nonces` (
 	`nonce` text PRIMARY KEY NOT NULL,
-	`expires_at` text NOT NULL
+	`expires_at` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `lti_tool_nonces_expires_at_idx` ON `lti_tool_nonces` (`expires_at`);--> statement-breakpoint
 CREATE TABLE `lti_tool_registration_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`data` text NOT NULL,
-	`expires_at` text NOT NULL
+	`expires_at` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `lti_tool_registration_sessions_expires_at_idx` ON `lti_tool_registration_sessions` (`expires_at`);--> statement-breakpoint
 CREATE TABLE `lti_tool_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`data` text NOT NULL,
-	`expires_at` text NOT NULL
+	`expires_at` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `lti_tool_sessions_expires_at_idx` ON `lti_tool_sessions` (`expires_at`);

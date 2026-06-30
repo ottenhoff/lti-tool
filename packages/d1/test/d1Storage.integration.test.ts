@@ -14,6 +14,7 @@ import {
 import { Log, LogLevel, Miniflare } from 'miniflare';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { createMockLTIPayload } from '../../core/test/helpers/fixtures.js';
 import { defineStorageConformanceSuite } from '../../core/test/helpers/storageConformance.js';
 import { D1Storage } from '../src/index.js';
 
@@ -37,7 +38,7 @@ const testDeployment: Omit<LTIDeployment, 'id'> = {
 
 const testSession: LTISession = {
   id: 'session-id',
-  jwtPayload: { iss: testClient.iss },
+  jwtPayload: createMockLTIPayload(),
   user: { id: 'user-id', roles: ['Learner'] },
   context: { id: 'context-id', label: 'TEST101', title: 'Test Course' },
   platform: {
@@ -142,7 +143,11 @@ describe('D1Storage with Miniflare D1', () => {
       await harness.sql(
         'run',
         'INSERT INTO lti_tool_sessions (id, data, expires_at) VALUES (?, ?, ?)',
-        ['expired-session', JSON.stringify({ user: { id: 'expired-user' } }), pastIso()],
+        [
+          'expired-session',
+          JSON.stringify({ user: { id: 'expired-user' } }),
+          pastTimestamp(),
+        ],
       );
 
       await expect(harness.storage('getSession', 'expired-session')).resolves.toBeNull();
@@ -159,7 +164,7 @@ describe('D1Storage with Miniflare D1', () => {
       await harness.sql(
         'run',
         'INSERT INTO lti_tool_nonces (nonce, expires_at) VALUES (?, ?)',
-        ['expired-nonce', pastIso()],
+        ['expired-nonce', pastTimestamp()],
       );
 
       await expect(harness.storage('validateNonce', 'expired-nonce')).resolves.toBe(
@@ -242,7 +247,11 @@ describe('D1Storage with Miniflare D1', () => {
       await harness.sql(
         'run',
         'INSERT INTO lti_tool_registration_sessions (id, data, expires_at) VALUES (?, ?, ?)',
-        ['expired-registration-session', JSON.stringify({ state: 'expired' }), pastIso()],
+        [
+          'expired-registration-session',
+          JSON.stringify({ state: 'expired' }),
+          pastTimestamp(),
+        ],
       );
 
       await expect(
@@ -256,12 +265,19 @@ describe('D1Storage with Miniflare D1', () => {
       await harness.sql(
         'run',
         'INSERT INTO lti_tool_nonces (nonce, expires_at) VALUES (?, ?), (?, ?)',
-        ['expired-nonce', pastIso(), 'active-nonce', futureIso()],
+        ['expired-nonce', pastTimestamp(), 'active-nonce', futureTimestamp()],
       );
       await harness.sql(
         'run',
         'INSERT INTO lti_tool_sessions (id, data, expires_at) VALUES (?, ?, ?), (?, ?, ?)',
-        ['expired-session', '{}', pastIso(), 'active-session', '{}', futureIso()],
+        [
+          'expired-session',
+          '{}',
+          pastTimestamp(),
+          'active-session',
+          '{}',
+          futureTimestamp(),
+        ],
       );
       await harness.sql(
         'run',
@@ -269,10 +285,10 @@ describe('D1Storage with Miniflare D1', () => {
         [
           'expired-registration',
           '{}',
-          pastIso(),
+          pastTimestamp(),
           'active-registration',
           '{}',
-          futureIso(),
+          futureTimestamp(),
         ],
       );
 
@@ -387,10 +403,10 @@ function reviveArgs(args: unknown[]): unknown[] {
   });
 }
 
-function futureIso(): string {
-  return new Date(Date.now() + 60_000).toISOString();
+function futureTimestamp(): number {
+  return Date.now() + 60_000;
 }
 
-function pastIso(): string {
-  return new Date(Date.now() - 60_000).toISOString();
+function pastTimestamp(): number {
+  return Date.now() - 60_000;
 }

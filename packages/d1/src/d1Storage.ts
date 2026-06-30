@@ -1,10 +1,10 @@
 import { type LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
-import { eq, lte } from 'drizzle-orm';
+import { lte } from 'drizzle-orm';
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
 
-import { toDeploymentInsertRow } from '#storage/drizzle-deployment-row';
 import {
   RelationalStorage,
+  DEFAULT_NONCE_TTL_SECONDS,
   type RelationalCleanupResult,
   type RelationalDatabase,
   type RelationalStorageDialect,
@@ -36,16 +36,9 @@ function createD1Dialect(db: DrizzleD1Database<typeof schema>): RelationalStorag
   return {
     name: 'D1',
     sessionTtlSeconds: SESSION_TTL,
-    insertClient: (client) => insertD1Client(db, client),
-    insertDeployment: (clientId, deployment) =>
-      insertD1Deployment(db, clientId, deployment),
+    nonceTtlSeconds: DEFAULT_NONCE_TTL_SECONDS,
     executeMutation: executeD1Mutation,
-    deleteClient: (clientId) => deleteD1Client(db, clientId),
-    insertSession: (session, expiresAt) =>
-      insertD1Session(db, session, expiresAt as string),
-    claimNonce: (nonce, expiresAt) =>
-      claimD1Nonce(db, nonce, expiresAt as string),
-    serializeDate: (date) => date.toISOString(),
+    claimNonce: (nonce, expiresAt) => claimD1Nonce(db, nonce, expiresAt),
     setRegistrationSession: (sessionId, session) =>
       setD1RegistrationSession(db, sessionId, session),
     cleanup: (now) => cleanupD1(db, now),
@@ -53,53 +46,10 @@ function createD1Dialect(db: DrizzleD1Database<typeof schema>): RelationalStorag
   };
 }
 
-async function insertD1Client(
-  db: DrizzleD1Database<typeof schema>,
-  client: Parameters<RelationalStorageDialect['insertClient']>[0],
-): Promise<string> {
-  const clientId = crypto.randomUUID();
-  await db
-    .insert(schema.clientsTable)
-    .values({
-      id: clientId,
-      ...client,
-    })
-    .run();
-  return clientId;
-}
-
-async function insertD1Deployment(
-  db: DrizzleD1Database<typeof schema>,
-  clientId: string,
-  deployment: Parameters<RelationalStorageDialect['insertDeployment']>[1],
-): Promise<string> {
-  const deploymentInternalId = crypto.randomUUID();
-  await db
-    .insert(schema.deploymentsTable)
-    .values({
-      id: deploymentInternalId,
-      clientId,
-      ...toDeploymentInsertRow(deployment),
-    })
-    .run();
-  return deploymentInternalId;
-}
-
-async function deleteD1Client(
-  db: DrizzleD1Database<typeof schema>,
-  clientId: string,
-): Promise<void> {
-  await db
-    .delete(schema.deploymentsTable)
-    .where(eq(schema.deploymentsTable.clientId, clientId))
-    .run();
-  await db.delete(schema.clientsTable).where(eq(schema.clientsTable.id, clientId)).run();
-}
-
 async function claimD1Nonce(
   db: DrizzleD1Database<typeof schema>,
   nonce: string,
-  expiresAt: string,
+  expiresAt: number,
 ): Promise<boolean> {
   const result = await db
     .insert(schema.noncesTable)
@@ -113,22 +63,6 @@ async function claimD1Nonce(
   return getChangedRows(result) === 1;
 }
 
-async function insertD1Session(
-  db: DrizzleD1Database<typeof schema>,
-  session: Parameters<RelationalStorageDialect['insertSession']>[0],
-  expiresAt: string,
-): Promise<void> {
-  const { id, ...data } = session;
-  await db
-    .insert(schema.sessionsTable)
-    .values({
-      id,
-      data,
-      expiresAt,
-    })
-    .run();
-}
-
 async function setD1RegistrationSession(
   db: DrizzleD1Database<typeof schema>,
   sessionId: string,
@@ -139,13 +73,13 @@ async function setD1RegistrationSession(
     .values({
       id: sessionId,
       data: session,
-      expiresAt: new Date(session.expiresAt).toISOString(),
+      expiresAt: session.expiresAt,
     })
     .onConflictDoUpdate({
       target: schema.registrationSessionsTable.id,
       set: {
         data: session,
-        expiresAt: new Date(session.expiresAt).toISOString(),
+        expiresAt: session.expiresAt,
       },
     })
     .run();
@@ -153,20 +87,19 @@ async function setD1RegistrationSession(
 
 async function cleanupD1(
   db: DrizzleD1Database<typeof schema>,
-  now: Date,
+  now: number,
 ): Promise<RelationalCleanupResult> {
-  const nowIso = now.toISOString();
   const nonces = await db
     .delete(schema.noncesTable)
-    .where(lte(schema.noncesTable.expiresAt, nowIso))
+    .where(lte(schema.noncesTable.expiresAt, now))
     .run();
   const sessions = await db
     .delete(schema.sessionsTable)
-    .where(lte(schema.sessionsTable.expiresAt, nowIso))
+    .where(lte(schema.sessionsTable.expiresAt, now))
     .run();
   const registrationSessions = await db
     .delete(schema.registrationSessionsTable)
-    .where(lte(schema.registrationSessionsTable.expiresAt, nowIso))
+    .where(lte(schema.registrationSessionsTable.expiresAt, now))
     .run();
 
   return {

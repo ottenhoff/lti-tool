@@ -1,12 +1,12 @@
 import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
-import { datetime, index, json, mysqlTable, varchar } from 'drizzle-orm/mysql-core';
+import { bigint, index, json, mysqlTable, varchar } from 'drizzle-orm/mysql-core';
 
 export const registrationSessionsTable = mysqlTable(
   'registrationSessions',
   {
     id: varchar({ length: 36 }).primaryKey(),
     data: json().$type<Omit<LTIDynamicRegistrationSession, 'sessionId'>>().notNull(),
-    expiresAt: datetime().notNull(),
+    expiresAt: bigint({ mode: 'number' }).notNull(),
   },
   (table) => [index('expires_at_idx').on(table.expiresAt)],
 );

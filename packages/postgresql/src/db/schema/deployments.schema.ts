@@ -1,17 +1,17 @@
-import { index, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import { index, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
 import { clientsTable } from './clients.schema.js';
 
 export const deploymentsTable = pgTable(
   'deployments',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: varchar('id', { length: 36 }).primaryKey(),
     deploymentId: varchar('deployment_id', { length: 255 }).notNull(),
     name: varchar('name', { length: 255 }),
     description: text('description'),
-    clientId: uuid('client_id')
+    clientId: varchar('client_id', { length: 36 })
       .notNull()
-      .references(() => clientsTable.id),
+      .references(() => clientsTable.id, { onDelete: 'cascade' }),
   },
   (table) => [
     index('deployment_id_idx').on(table.deploymentId),

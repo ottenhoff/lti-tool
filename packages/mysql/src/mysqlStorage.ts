@@ -1,12 +1,12 @@
 import { isServerlessEnvironment } from '@longsightgroup/lti-tool';
-import { eq, lt } from 'drizzle-orm';
+import { lt } from 'drizzle-orm';
 import { drizzle, type MySql2Database } from 'drizzle-orm/mysql2';
 import mysql from 'mysql2/promise';
 import type { Logger } from 'pino';
 
-import { toDeploymentInsertRow } from '#storage/drizzle-deployment-row';
 import {
   RelationalStorage,
+  DEFAULT_NONCE_TTL_SECONDS,
   type RelationalCleanupResult,
   type RelationalDatabase,
   type RelationalStorageDialect,
@@ -61,62 +61,23 @@ function createMySqlDialect(db: MySql2Database<typeof schema>): RelationalStorag
   return {
     name: 'MySQL',
     sessionTtlSeconds: SESSION_TTL,
-    insertClient: async (client) => {
-      const clientId = crypto.randomUUID();
-      await db.insert(schema.clientsTable).values({
-        id: clientId,
-        ...client,
-      });
-      return clientId;
-    },
-    insertDeployment: async (clientId, deployment) => {
-      const deploymentInternalId = crypto.randomUUID();
-      await db.insert(schema.deploymentsTable).values({
-        id: deploymentInternalId,
-        clientId,
-        ...toDeploymentInsertRow(deployment),
-      });
-      return deploymentInternalId;
-    },
-    deleteClient: (clientId) => deleteMySqlClient(db, clientId),
-    requireExistingClientBeforeDelete: true,
-    insertSession: async (session, expiresAt) => {
-      const { id, ...data } = session;
-      await db.insert(schema.sessionsTable).values({
-        id,
-        data,
-        expiresAt: expiresAt as Date,
-      });
-    },
-    claimNonce: (nonce, expiresAt) => claimMySqlNonce(db, nonce, expiresAt as Date),
-    serializeDate: (date) => date,
+    nonceTtlSeconds: DEFAULT_NONCE_TTL_SECONDS,
+    claimNonce: (nonce, expiresAt) => claimMySqlNonce(db, nonce, expiresAt),
     setRegistrationSession: async (sessionId, session) => {
       await db.insert(schema.registrationSessionsTable).values({
         id: sessionId,
         data: session,
-        expiresAt: new Date(session.expiresAt),
+        expiresAt: session.expiresAt,
       });
     },
     cleanup: (now) => cleanupMySql(db, now),
   };
 }
 
-async function deleteMySqlClient(
-  db: MySql2Database<typeof schema>,
-  clientId: string,
-): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(schema.deploymentsTable)
-      .where(eq(schema.deploymentsTable.clientId, clientId));
-    await tx.delete(schema.clientsTable).where(eq(schema.clientsTable.id, clientId));
-  });
-}
-
 async function claimMySqlNonce(
   db: MySql2Database<typeof schema>,
   nonce: string,
-  expiresAt: Date,
+  expiresAt: number,
 ): Promise<boolean> {
   const result = await db
     .insert(schema.noncesTable)
@@ -128,7 +89,7 @@ async function claimMySqlNonce(
 
 async function cleanupMySql(
   db: MySql2Database<typeof schema>,
-  now: Date,
+  now: number,
 ): Promise<RelationalCleanupResult> {
   const noncesResult = await db
     .delete(schema.noncesTable)

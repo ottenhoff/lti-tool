@@ -1,12 +1,12 @@
 import { isServerlessEnvironment } from '@longsightgroup/lti-tool';
-import { eq, lt } from 'drizzle-orm';
+import { lt } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { Logger } from 'pino';
 import postgres from 'postgres';
 
-import { toDeploymentInsertRow } from '#storage/drizzle-deployment-row';
 import {
   RelationalStorage,
+  DEFAULT_NONCE_TTL_SECONDS,
   type RelationalCleanupResult,
   type RelationalDatabase,
   type RelationalStorageDialect,
@@ -62,62 +62,23 @@ function createPostgresDialect(
   return {
     name: 'PostgreSQL',
     sessionTtlSeconds: SESSION_TTL,
-    insertClient: async (client) => {
-      const [inserted] = await db
-        .insert(schema.clientsTable)
-        .values(client)
-        .returning({ id: schema.clientsTable.id });
-      return inserted.id;
-    },
-    insertDeployment: async (clientId, deployment) => {
-      const [inserted] = await db
-        .insert(schema.deploymentsTable)
-        .values({
-          clientId,
-          ...toDeploymentInsertRow(deployment),
-        })
-        .returning({ id: schema.deploymentsTable.id });
-      return inserted.id;
-    },
-    deleteClient: (clientId) => deletePostgresClient(db, clientId),
-    requireExistingClientBeforeDelete: true,
-    insertSession: async (session, expiresAt) => {
-      const { id, ...data } = session;
-      await db.insert(schema.sessionsTable).values({
-        id,
-        data,
-        expiresAt: expiresAt as Date,
-      });
-    },
-    claimNonce: (nonce, expiresAt) => claimPostgresNonce(db, nonce, expiresAt as Date),
-    serializeDate: (date) => date,
+    nonceTtlSeconds: DEFAULT_NONCE_TTL_SECONDS,
+    claimNonce: (nonce, expiresAt) => claimPostgresNonce(db, nonce, expiresAt),
     setRegistrationSession: async (sessionId, session) => {
       await db.insert(schema.registrationSessionsTable).values({
         id: sessionId,
         data: session,
-        expiresAt: new Date(session.expiresAt),
+        expiresAt: session.expiresAt,
       });
     },
     cleanup: (now) => cleanupPostgres(db, now),
   };
 }
 
-async function deletePostgresClient(
-  db: PostgresJsDatabase<typeof schema>,
-  clientId: string,
-): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(schema.deploymentsTable)
-      .where(eq(schema.deploymentsTable.clientId, clientId));
-    await tx.delete(schema.clientsTable).where(eq(schema.clientsTable.id, clientId));
-  });
-}
-
 async function claimPostgresNonce(
   db: PostgresJsDatabase<typeof schema>,
   nonce: string,
-  expiresAt: Date,
+  expiresAt: number,
 ): Promise<boolean> {
   const rows = await db
     .insert(schema.noncesTable)
@@ -130,7 +91,7 @@ async function claimPostgresNonce(
 
 async function cleanupPostgres(
   db: PostgresJsDatabase<typeof schema>,
-  now: Date,
+  now: number,
 ): Promise<RelationalCleanupResult> {
   const noncesResult = await db
     .delete(schema.noncesTable)

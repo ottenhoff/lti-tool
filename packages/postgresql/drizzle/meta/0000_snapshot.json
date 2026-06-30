@@ -10,10 +10,9 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "varchar(36)",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "name": {
           "name": "name",
@@ -109,10 +108,9 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "varchar(36)",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "deployment_id": {
           "name": "deployment_id",
@@ -134,7 +132,7 @@
         },
         "client_id": {
           "name": "client_id",
-          "type": "uuid",
+          "type": "varchar(36)",
           "primaryKey": false,
           "notNull": true
         }
@@ -184,7 +182,7 @@
           "tableTo": "clients",
           "columnsFrom": ["client_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -206,7 +204,7 @@
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "timestamp with time zone",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         }
@@ -225,10 +223,9 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "varchar(36)",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "data": {
           "name": "data",
@@ -238,7 +235,7 @@
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "timestamp with time zone",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         }
@@ -273,10 +270,9 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "varchar(36)",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "data": {
           "name": "data",
@@ -286,7 +282,7 @@
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "timestamp with time zone",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         }

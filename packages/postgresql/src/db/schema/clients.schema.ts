@@ -1,9 +1,9 @@
-import { index, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import { index, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
 export const clientsTable = pgTable(
   'clients',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: varchar('id', { length: 36 }).primaryKey(),
     name: varchar('name', { length: 255 }).notNull(),
     iss: varchar('iss', { length: 255 }).notNull(),
     clientId: varchar('client_id', { length: 255 }).notNull(),

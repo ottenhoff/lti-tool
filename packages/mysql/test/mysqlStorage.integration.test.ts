@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/mysql2';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { createMockLTIPayload } from '../../core/test/helpers/fixtures.js';
 import { defineStorageConformanceSuite } from '../../core/test/helpers/storageConformance.js';
 import * as schema from '../src/db/schema/index.js';
 import { MySqlStorage } from '../src/index.js';
@@ -30,7 +31,7 @@ const testDeployment: Omit<LTIDeployment, 'id'> = {
 
 const testSession: LTISession = {
   id: 'session-789',
-  jwtPayload: { iss: 'https://platform.example.com' },
+  jwtPayload: createMockLTIPayload(),
   user: { id: 'user123', roles: ['Learner'] },
   context: { id: 'context123', label: 'TEST101', title: 'Test Course' },
   platform: {
@@ -108,6 +109,7 @@ describe('MySqlStorage - Client Operations', () => {
 
     const retrieved = await storage.getClientById(clientId);
     expect(retrieved).toBeUndefined();
+    await expect(storage.listDeployments(clientId)).resolves.toEqual([]);
   });
 });
 
@@ -123,7 +125,7 @@ describe('MySqlStorage - Session Operations', () => {
     await db.insert(schema.sessionsTable).values({
       id: 'expired',
       data: testSession,
-      expiresAt: new Date(Date.now() - 1000),
+      expiresAt: Date.now() - 1000,
     });
 
     const retrieved = await storage.getSession('expired');
@@ -146,7 +148,7 @@ describe('MySqlStorage - Nonce Validation', () => {
   it('should reject expired nonce still present before cleanup', async () => {
     await db.insert(schema.noncesTable).values({
       nonce: 'expired-nonce',
-      expiresAt: new Date(Date.now() - 1000),
+      expiresAt: Date.now() - 1000,
     });
 
     const result = await storage.validateNonce('expired-nonce');
@@ -187,7 +189,7 @@ describe('MySqlStorage - Cleanup', () => {
   it('should delete expired items', async () => {
     await db.insert(schema.noncesTable).values({
       nonce: 'expired-nonce',
-      expiresAt: new Date(Date.now() - 1000),
+      expiresAt: Date.now() - 1000,
     });
 
     const result = await storage.cleanup();
