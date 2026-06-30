@@ -2,17 +2,21 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  quality:
-    name: Code Quality
+  check:
+    name: Check
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -26,37 +30,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build packages
+      - name: Check formatting
+        run: npm run format
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
         run: npm run build
 
       - name: Smoke test dist imports
         run: npm run smoke-test:dist
 
-      - name: Type check
-        run: npm run type-check
-
-      - name: Lint check
-        run: npm run lint
-
-      - name: Format check
-        run: npm run format
-
-      - name: Build packages
-        run: npm run build
-
   test:
     name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 15
     strategy:
       matrix:
-        node-version: [20, 22, 24]
+        node-version: [22, 24]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
@@ -65,18 +65,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build core package
-        run: npm run build --workspace=@lti-tool/core
+      - name: Build
+        run: npm run build
 
-      - name: Run tests
-        run: npx vitest run --coverage --reporter=verbose --exclude="**/*.integration.test.ts"
+      - name: Run tests with coverage
+        run: npm run test:coverage
 
-  integration:
-    name: Integration Tests
+  audit:
+    name: Audit dependencies
     runs-on: ubuntu-latest
-    needs: [quality, test]
-    permissions:
-      contents: read
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run OSV Scanner
+        uses: google/osv-scanner-action@v2.3.8
+        with:
+          scan-args: |-
+            --lockfile=package-lock.json
+
+  integration-core:
+    name: Integration (core)
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -90,31 +103,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build packages
+      - name: Build
         run: npm run build
 
       - name: Run core integration tests
-        run: npx vitest run packages/core/test/*.integration.test.ts
+        run: npm run test:integration:core
 
-  adapter-integration:
-    name: Adapter Integration (${{ matrix.adapter }})
+  integration-mysql:
+    name: Integration (mysql)
     runs-on: ubuntu-latest
-    needs: [quality]
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - adapter: mysql
-            database-url: mysql://lti_user:lti_password@127.0.0.1:3306/lti_test
-          - adapter: postgresql
-            database-url: postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test
-          - adapter: d1
-            database-url: ''
+    needs: check
+    timeout-minutes: 15
     services:
       mysql:
-        image: ${{ matrix.adapter == 'mysql' && 'mysql:8.0' || '' }}
+        image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: lti_test
@@ -127,8 +129,40 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply MySQL schema
+        env:
+          DATABASE_URL: mysql://lti_user:lti_password@127.0.0.1:3306/lti_test
+        run: npm run db:migrate:mysql
+
+      - name: Run MySQL integration tests
+        env:
+          DATABASE_URL: mysql://lti_user:lti_password@127.0.0.1:3306/lti_test
+        run: npm run test:integration:mysql
+
+  integration-postgresql:
+    name: Integration (postgresql)
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 15
+    services:
       postgresql:
-        image: ${{ matrix.adapter == 'postgresql' && 'postgres:16' || '' }}
+        image: postgres:16
         env:
           POSTGRES_USER: lti_user
           POSTGRES_PASSWORD: lti_password
@@ -147,35 +181,30 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build core package
-        run: npm run build --workspace=@lti-tool/core
+      - name: Build
+        run: npm run build
 
-      - name: Apply adapter schema
-        if: matrix.database-url != ''
-        working-directory: packages/${{ matrix.adapter }}
+      - name: Apply PostgreSQL schema
         env:
-          DATABASE_URL: ${{ matrix.database-url }}
-        run: npx drizzle-kit migrate
+          DATABASE_URL: postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test
+        run: npm run db:migrate:postgresql
 
-      - name: Run adapter integration tests
+      - name: Run PostgreSQL integration tests
         env:
-          DATABASE_URL: ${{ matrix.database-url }}
-        run: npx vitest run packages/${{ matrix.adapter }}/test/*.integration.test.ts
+          DATABASE_URL: postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test
+        run: npm run test:integration:postgresql
 
-  security:
-    name: Security Scan
-    if: github.repository_owner == 'lti-tool'
+  integration-d1:
+    name: Integration (d1)
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-      actions: read
+    needs: check
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -189,29 +218,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build packages
+      - name: Build
         run: npm run build
 
-      - name: Run npm audit
-        run: npm audit --audit-level=high
-
-  ci:
-    name: CI Status
-    runs-on: ubuntu-latest
-    needs: [quality, test, integration, adapter-integration, security]
-    if: always() && github.repository_owner == 'lti-tool'
-    permissions:
-      contents: read
-    steps:
-      - name: Check all jobs
-        run: |
-          if [[ "${{ needs.quality.result }}" == "success" &&
-                "${{ needs.test.result }}" == "success" &&
-                "${{ needs.integration.result }}" == "success" &&
-                "${{ needs.adapter-integration.result }}" == "success" &&
-                "${{ needs.security.result }}" == "success" ]]; then
-            echo "All CI jobs passed"
-          else
-            echo "Some CI jobs failed"
-            exit 1
-          fi
+      - name: Run D1 integration tests
+        run: npm run test:integration:d1
