@@ -1,9 +1,9 @@
-# @lti-tool/hono
+# @longsightgroup/lti-tool/hono
 
 <p align="center">Hono middleware for LTI 1.3. Serverless-optimized with automatic route handling.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/hono"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fhono" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool/hono"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fhono" /></a>
 </p>
 
 ## Quick Start
@@ -17,21 +17,21 @@ npm create hono@latest
 Install the packages
 
 ```bash
-npm install @lti-tool/core @lti-tool/hono @lti-tool/memory
+npm install @longsightgroup/lti-tool @longsightgroup/lti-tool/hono @longsightgroup/lti-tool/storage/memory
 ```
 
 Create a minimal Hono powered LTI tool
 
 ```typescript
 import { Hono } from 'hono';
-import { LTITool } from '@lti-tool/core';
+import { LTITool } from '@longsightgroup/lti-tool';
 import {
   jwksRouteHandler,
   launchRouteHandler,
   loginRouteHandler,
   secureLTISession,
-} from '@lti-tool/hono';
-import { MemoryStorage } from '@lti-tool/memory';
+} from '@longsightgroup/lti-tool/hono';
+import { MemoryStorage } from '@longsightgroup/lti-tool/storage/memory';
 
 // Generate keypair (use proper key management in production)
 const keyPair = await crypto.subtle.generateKey(
@@ -90,7 +90,7 @@ Individual route handlers for LTI endpoints. Each handler takes your LTI configu
 Handles LTI login initiation (OIDC third-party initiated login).
 
 ```typescript
-import { loginRouteHandler } from '@lti-tool/hono';
+import { loginRouteHandler } from '@longsightgroup/lti-tool/hono';
 
 app.post('/lti/login', loginRouteHandler(ltiConfig));
 ```
@@ -100,7 +100,7 @@ app.post('/lti/login', loginRouteHandler(ltiConfig));
 Handles LTI launch verification and session creation.
 
 ```typescript
-import { launchRouteHandler } from '@lti-tool/hono';
+import { launchRouteHandler } from '@longsightgroup/lti-tool/hono';
 
 app.post('/lti/launch', launchRouteHandler(ltiConfig));
 ```
@@ -110,7 +110,7 @@ app.post('/lti/launch', launchRouteHandler(ltiConfig));
 Serves the JSON Web Key Set (JWKS) for platform verification.
 
 ```typescript
-import { jwksRouteHandler } from '@lti-tool/hono';
+import { jwksRouteHandler } from '@longsightgroup/lti-tool/hono';
 
 app.get('/lti/jwks', jwksRouteHandler(ltiConfig));
 ```
@@ -120,7 +120,7 @@ app.get('/lti/jwks', jwksRouteHandler(ltiConfig));
 Middleware to protect routes with LTI session validation.
 
 ```typescript
-import { secureLTISession } from '@lti-tool/hono';
+import { secureLTISession } from '@longsightgroup/lti-tool/hono';
 
 app.use('/protected/*', secureLTISession(ltiTool.config));
 

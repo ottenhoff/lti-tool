@@ -52,13 +52,12 @@ const mockStorage: LTIStorage = {
   updateClient: vi.fn(),
   deleteClient: vi.fn(),
   listDeployments: vi.fn(),
-  getDeployment: vi.fn(),
+  getDeploymentByPlatformId: vi.fn(),
   addDeployment: vi.fn(),
-  updateDeployment: vi.fn(),
-  deleteDeployment: vi.fn(),
+  updateDeploymentById: vi.fn(),
+  deleteDeploymentById: vi.fn(),
   getSession: vi.fn(),
   addSession: vi.fn(),
-  storeNonce: vi.fn(),
   validateNonce: vi.fn(),
   getLaunchConfig: vi.fn(),
   saveLaunchConfig: vi.fn(),
@@ -167,7 +166,9 @@ describe('AGSService', () => {
       const headers = options.headers as Headers;
       expect(headers.get('Authorization')).toBe('Bearer mock-bearer-token');
       expect(headers.get('Content-Type')).toBe('application/vnd.ims.lis.v1.score+json');
-      expect(headers.get('User-Agent')).toMatch(/^lti-tool\/\d+\.\d+\.\d+/);
+      expect(headers.get('User-Agent')).toMatch(
+        /^@longsightgroup\/lti-tool\/\d+\.\d+\.\d+/,
+      );
 
       // Verify score payload structure
       const fetchCall = mockFetch.mock.calls[0];

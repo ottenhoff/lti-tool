@@ -1,75 +1,49 @@
-<div align="center">
-  <img src="./media/logo.png" alt="LTI Tool" />
-</div>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/core"><img alt="npm" src="https://img.shields.io/npm/dm/%40lti-tool%2Fcore?style=flat-square" /></a>
-  <a href="https://github.com/lti-tool/lti-tool/actions/workflows/ci.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/lti-tool/lti-tool/release.yml" /></a>
-</p>
-
 # LTI Tool
 
-<p align="center">Modern LTI 1.3 toolkit, built for TypeScript.</p>
+A TypeScript library for building [LTI 1.3](https://www.imsglobal.org/spec/lti/v1p3) tools that run on Node.js, Cloudflare Workers, AWS Lambda, and other modern runtimes.
 
-## Why This Library?
+Built on [lti-tool/lti-tool](https://github.com/lti-tool/lti-tool).
 
-The first **serverless-native** LTI 1.3 library for Node.js. Built for modern cloud architectures with pluggable storage and framework adapters.
+[![npm](https://img.shields.io/npm/v/@longsightgroup/lti-tool?style=flat-square)](https://www.npmjs.com/package/@longsightgroup/lti-tool)
+[![CI](https://img.shields.io/github/actions/workflow/status/LongsightGroup/lti-tool/ci.yml?style=flat-square)](https://github.com/LongsightGroup/lti-tool/actions/workflows/ci.yml)
 
-**Key features**
+## What this is
 
-- **Serverless-first** - Optimized for AWS Lambda, Cloudflare Workers
-- **Pluggable storage** - Memory, DynamoDB, PostgreSQL, MySQL, Cloudflare D1
-- **Modern frameworks** - Hono (primary), Express/Fastify (planned)
-- **Security-focused** - JWT verification, nonce validation, replay attack prevention
-- **Performance** - 6.5ms average execution time, scales to zero
-- **Cost-effective** - Under $0.001 per 1000 LTI launches
+An LMS (Canvas, Moodle, Sakai, Blackboard, and others) launches your application inside an iframe using LTI 1.3. That launch is an OIDC login flow: the platform redirects the browser to your tool, your tool redirects back to the platform, and the platform posts a signed ID token to your launch endpoint. Your tool verifies that token, learns who the user is and which course they came from, and then serves content.
 
-**Fully Implemented LTI 1.3 Specification:**
+LTI Tool handles that protocol work so you can focus on your application:
 
-- ✅ OIDC Authentication Flow
-- ✅ Assignment and Grade Services (AGS) - Score submission, line items, results
-- ✅ Names and Role Provisioning Services (NRPS) - Member roster access
-- ✅ Deep Linking - Content selection and placement
-- ✅ Dynamic Registration - Automated tool registration
-- ✅ Security - JWT verification, nonce validation, replay attack prevention
+- OIDC third-party login and launch verification
+- Session management without relying on third-party cookies
+- LTI Advantage services: grades (AGS), rosters (NRPS), deep linking, and dynamic registration
+- Pluggable storage for platform configuration, sessions, and nonces
+- Optional [Hono](https://hono.dev) route handlers for the standard LTI endpoints
 
-### Future Releases
+The package ships as a single npm module with subpath exports. Install once, import only what you need.
 
-- **Examples Repository** - Comprehensive example implementations
-- **Framework Support** - Express, Fastify, Astro, React, Angular
-
-## Documentation
-
-- [API Reference](https://docs.lti-tool.dev) - Complete API documentation
-
-## Hono Quick Start
-
-Create a new Hono app
+## Install
 
 ```bash
-npm create hono@latest
+npm install @longsightgroup/lti-tool hono
 ```
 
-Install the packages
+Storage adapters pull in optional peer dependencies (`postgres`, `mysql2`, `@aws-sdk/client-dynamodb`, `drizzle-orm`, and others). Install the backend you actually use.
 
-```bash
-npm install @lti-tool/core @lti-tool/hono @lti-tool/memory
-```
+## Quick start
 
-Create a minimal Hono powered LTI tool
+This example wires up the three endpoints every LTI 1.3 tool needs, registers a Moodle sandbox platform, and protects a route with the launch session.
 
 ```typescript
 import { Hono } from 'hono';
-import { LTITool } from '@lti-tool/core';
+import { LTITool } from '@longsightgroup/lti-tool';
 import {
   jwksRouteHandler,
   launchRouteHandler,
   loginRouteHandler,
   secureLTISession,
-} from '@lti-tool/hono';
-import { MemoryStorage } from '@lti-tool/memory';
+} from '@longsightgroup/lti-tool/hono';
+import { MemoryStorage } from '@longsightgroup/lti-tool/storage/memory';
 
-// Generate keypair (use proper key management in production)
 const keyPair = await crypto.subtle.generateKey(
   {
     name: 'RSASSA-PKCS1-v1_5',
@@ -82,167 +56,166 @@ const keyPair = await crypto.subtle.generateKey(
 );
 
 const ltiConfig = {
-  stateSecret: new TextEncoder().encode('your-secret-key'),
+  stateSecret: new TextEncoder().encode('use-a-random-secret-at-least-32-bytes'),
   keyPair,
   storage: new MemoryStorage(),
 };
 
 const ltiTool = new LTITool(ltiConfig);
 
-// Add your LMS configuration
-const clientId = await ltiTool.addClient({
+await ltiTool.upsertLaunchRegistration({
   name: 'Moodle Sandbox',
-  clientId: 'your-client-id-from-moodle',
   iss: 'https://sandbox.moodledemo.net',
+  clientId: 'your-client-id',
+  deploymentId: 'your-deployment-id',
   jwksUrl: 'https://sandbox.moodledemo.net/mod/lti/certs.php',
   authUrl: 'https://sandbox.moodledemo.net/mod/lti/auth.php',
   tokenUrl: 'https://sandbox.moodledemo.net/mod/lti/token.php',
-});
-
-await ltiTool.addDeployment(clientId, {
-  deploymentId: 'your-deployment-id-from-moodle',
-  name: 'Default Deployment',
 });
 
 const app = new Hono();
 
-// Add LTI routes
 app.get('/lti/jwks', jwksRouteHandler(ltiConfig));
-app.post('/lti/launch', launchRouteHandler(ltiConfig));
+app.get('/lti/login', loginRouteHandler(ltiConfig));
 app.post('/lti/login', loginRouteHandler(ltiConfig));
+app.post('/lti/launch', launchRouteHandler(ltiConfig));
 
-// Protect routes with LTI session
-app.use('/protected/*', secureLTISession(ltiConfig));
-
-app.get('/protected/content', (c) => {
+app.use('/app/*', secureLTISession(ltiConfig));
+app.get('/app', (c) => {
   const session = c.get('ltiSession');
-  return c.json({ message: `Hello ${session.user.name}` });
+  return c.json({ hello: session.user.name, course: session.context?.title });
 });
 ```
 
-## Performance
+After a successful launch, the library redirects the browser to your target URL with an `ltiSessionId` query parameter. Protected routes read that parameter to load the session.
 
-Optimized for serverless with impressive performance metrics
+In production, load your RSA key pair and `stateSecret` from a secrets manager instead of generating them at startup. `MemoryStorage` is for development and tests only.
 
-| Operation         | Execution Time |
-| ----------------- | -------------- |
-| Login/JWKS        | 3-5ms          |
-| Launch (heaviest) | 12-15ms        |
-| **Average**       | **6.5ms**      |
+## How a launch works
 
-## Architecture
+```mermaid
+sequenceDiagram
+  participant LMS as LMS (platform)
+  participant Browser
+  participant Tool as Your tool
 
-### Packages
+  Browser->>Tool: GET /lti/login (iss, client_id, login_hint, ...)
+  Tool->>Browser: 302 to LMS authorization endpoint
+  Browser->>LMS: Authenticate user
+  LMS->>Browser: Auto-post id_token + state to /lti/launch
+  Browser->>Tool: POST /lti/launch
+  Tool->>Tool: Verify JWT, check nonce, create session
+  Tool->>Browser: 302 to /app?ltiSessionId=...
+  Browser->>Tool: GET /app?ltiSessionId=...
+  Tool->>Browser: Your application response
+```
 
-| Package                                         | Description                   | Use Case                       |
-| ----------------------------------------------- | ----------------------------- | ------------------------------ |
-| [`@lti-tool/core`](./packages/core)             | Core LTI 1.3 implementation   | Required for all setups        |
-| [`@lti-tool/hono`](./packages/hono)             | Hono framework integration    | Serverless APIs                |
-| [`@lti-tool/memory`](./packages/memory)         | In-memory storage adapter     | Development and testing        |
-| [`@lti-tool/dynamodb`](./packages/dynamodb)     | DynamoDB storage adapter      | Production AWS deployments     |
-| [`@lti-tool/postgresql`](./packages/postgresql) | PostgreSQL storage adapter    | Production SQL deployments     |
-| [`@lti-tool/mysql`](./packages/mysql)           | MySQL storage adapter         | Production SQL deployments     |
-| [`@lti-tool/d1`](./packages/d1)                 | Cloudflare D1 storage adapter | Cloudflare Workers deployments |
+The library verifies the ID token signature against the platform JWKS, validates the OAuth state and nonce, confirms the client ID and deployment ID match your stored configuration, and persists a session you can use for later LTI service calls.
 
-### Storage Adapters
+## Core concepts
 
-Pluggable storage system supports multiple backends
+| Concept           | What it is                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Client**        | A registered LMS platform (issuer URL, OAuth client ID, auth/token/JWKS endpoints).                                                      |
+| **Deployment**    | A specific tool installation on that platform, identified by `deployment_id` in the launch.                                              |
+| **Launch config** | Cached platform + deployment metadata used on the hot launch path. Created automatically by `upsertLaunchRegistration`.                  |
+| **Session**       | The verified launch context: user, roles, course, resource link, and available LTI services. Referenced by `ltiSessionId`.               |
+| **Storage**       | Persistence for clients, deployments, sessions, nonces, and dynamic-registration state. Swap adapters without changing application code. |
 
-- **Memory** - Development and testing
-- **DynamoDB** - Production AWS (with caching)
-- **PostgreSQL** - Production SQL deployments
-- **MySQL** - Production SQL deployments
-- **Cloudflare D1** - Cloudflare Workers deployments
-- **Custom** - Implement the `LTIStorage` interface
+Register a platform manually with `addClient` and `addDeployment`, or use `upsertLaunchRegistration` to create or update everything from the values your LMS administrator gives you.
 
-### Framework Support
+## Package exports
 
-- **Hono** - Primary target (serverless-optimized)
-- **TanStack** - Planned
-- **Fastify** - Planned
-- **Astro** - Planned
-- **Express** - Planned
+Everything installs as `@longsightgroup/lti-tool`. Import subpaths for adapters and framework helpers.
 
-## Testing with Moodle Sandbox
+| Import                                        | Purpose                                                      |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `@longsightgroup/lti-tool`                    | `LTITool`, schemas, launch verification, LTI service helpers |
+| `@longsightgroup/lti-tool/hono`               | Route handlers and session middleware                        |
+| `@longsightgroup/lti-tool/storage/memory`     | In-memory storage (dev/test)                                 |
+| `@longsightgroup/lti-tool/storage/dynamodb`   | DynamoDB (AWS Lambda, serverless)                            |
+| `@longsightgroup/lti-tool/storage/postgresql` | PostgreSQL via Drizzle                                       |
+| `@longsightgroup/lti-tool/storage/mysql`      | MySQL via Drizzle                                            |
+| `@longsightgroup/lti-tool/storage/d1`         | Cloudflare D1                                                |
 
-Test your implementation with the public Moodle sandbox
+Implement the `LTIStorage` interface yourself if you need Redis, another database, or a custom control plane.
 
-### 1. Access Moodle Sandbox
+## Hono routes
 
-- URL: https://sandbox.moodledemo.net/
-- Login with administrator credentials (available on the site)
+| Route handler                             | Method(s) | Endpoint (convention)                                      |
+| ----------------------------------------- | --------- | ---------------------------------------------------------- |
+| `jwksRouteHandler`                        | GET       | `/lti/jwks` — your tool's public keys                      |
+| `loginRouteHandler`                       | GET, POST | `/lti/login` — OIDC login initiation                       |
+| `launchRouteHandler`                      | POST      | `/lti/launch` — ID token verification and session creation |
+| `deepLinkRouteHandler`                    | GET       | `/lti/deep-linking` — deep linking content selection UI    |
+| `initiateDynamicRegistrationRouteHandler` | GET       | `/lti/register` — start dynamic registration               |
+| `completeDynamicRegistrationRouteHandler` | POST      | `/lti/register/complete` — finish dynamic registration     |
 
-### 2. Configure LTI Tool
+`secureLTISession` middleware validates `ltiSessionId` on incoming requests and sets `ltiSession` on the Hono context.
 
-1. Go to **Site Administration** → **Plugins** → **Activity modules** → **External tool** → **Manage tools**
-2. Click **"configure a tool manually"**
-3. Fill in the configuration
+You can also use the core `LTITool` class directly without Hono — call `handleLogin`, `verifyLaunch`, and `createSession` from your own framework.
+
+## LTI Advantage services
+
+Once you have a session, `LTITool` can call platform services on the user's behalf:
+
+- **AGS** — submit scores, manage line items, read results (`submitScore`, `createLineItem`, `getResults`, and related methods)
+- **NRPS** — fetch course membership (`getMembers`)
+- **Deep linking** — return content items to the platform (`createDeepLinkingResponse`)
+- **Dynamic registration** — let administrators register the tool without manual JSON exchange (`initiateDynamicRegistration`, `completeDynamicRegistration`)
+
+Service availability depends on what the platform enabled for the deployment. Helper functions like `isLtiAgsAvailable` and `isLtiNrpsAvailable` inspect the session claims.
+
+## Storage adapters
+
+| Adapter            | Best for                      | Notes                                                  |
+| ------------------ | ----------------------------- | ------------------------------------------------------ |
+| Memory             | Local development, unit tests | No persistence across restarts                         |
+| DynamoDB           | AWS serverless                | Three-table design with TTL for sessions and nonces    |
+| PostgreSQL / MySQL | Traditional deployments       | Drizzle schemas and migrations included in the package |
+| D1                 | Cloudflare Workers            | SQLite-compatible edge database                        |
+
+Each SQL adapter ships with a `drizzle.config.ts` and migration files. See the README in `packages/postgresql`, `packages/mysql`, or `packages/d1` for setup commands.
+
+## Test with Moodle sandbox
+
+[Moodle's public sandbox](https://sandbox.moodledemo.net/) is a free way to exercise a real launch.
+
+1. Log in as administrator (credentials are on the site).
+2. Go to **Site administration → Plugins → External tool → Manage tools**.
+3. Choose **configure a tool manually** and set:
 
 | Field              | Value                                |
 | ------------------ | ------------------------------------ |
-| Tool name          | `lti-tool`                           |
 | Tool URL           | `https://your-domain.com`            |
-| LTI version        | **LTI 1.3**                          |
-| Public key type    | **Keyset URL**                       |
+| LTI version        | LTI 1.3                              |
+| Public key type    | Keyset URL                           |
 | Public keyset      | `https://your-domain.com/lti/jwks`   |
 | Login URL          | `https://your-domain.com/lti/login`  |
 | Redirection URI(s) | `https://your-domain.com/lti/launch` |
 
-4. Enable services
-   - **IMS LTI Assignment and Grade Services**: Use this service for grade sync
-   - **IMS LTI Names and Role Provisioning**: Use this service to retrieve members
-   - **Tool Settings**: Use this service
+4. Enable AGS, NRPS, and deep linking if you want to test those services.
+5. After saving, open the tool details (magnifying glass icon) and copy the **Client ID** and **Deployment ID** into `upsertLaunchRegistration`.
+6. Add the tool to a course as an **External tool** activity and launch it.
 
-5. Set privacy options (optional)
-   - Share launcher's name: **Always**
-   - Share launcher's email: **Always**
-
-### 3. Get Configuration Details
-
-After saving, click the magnifying glass to view tool details and update your code
-
-```typescript
-const clientId = await ltiTool.addClient({
-  name: 'Moodle Sandbox',
-  clientId: 'YOUR_CLIENT_ID_FROM_MOODLE', // Copy from tool details
-  iss: 'https://sandbox.moodledemo.net',
-  jwksUrl: 'https://sandbox.moodledemo.net/mod/lti/certs.php',
-  authUrl: 'https://sandbox.moodledemo.net/mod/lti/auth.php',
-  tokenUrl: 'https://sandbox.moodledemo.net/mod/lti/token.php',
-});
-
-await ltiTool.addDeployment(clientId, {
-  deploymentId: 'YOUR_DEPLOYMENT_ID_FROM_MOODLE', // Copy from tool details
-  name: 'Default Deployment',
-});
-```
-
-### 4. Add to Course
-
-1. Edit any course
-2. Add activity → **External tool**
-3. Select your configured tool
-4. Test the launch!
+For local development, expose your server with a tunnel (ngrok, Cloudflare Tunnel, etc.) so the sandbox can reach your endpoints.
 
 ## Security
 
-Production-ready security features
+- JWT signatures are verified against the platform JWKS.
+- OAuth `state` and `nonce` values are validated to prevent CSRF and replay attacks.
+- Client ID and deployment ID must match stored configuration.
+- Sessions are referenced by ID in the URL, not browser cookies — this works inside LMS iframes where third-party cookies are blocked.
 
-- **JWT Signature Verification** - Using platform JWKS
-- **Nonce Validation** - Prevents replay attacks
-- **State Verification** - CSRF protection
-- **Client ID Validation** - Ensures proper tool targeting
-- **Deployment Verification** - Validates deployment context
-- **Cookie-Free Design** - Works in all iframe contexts, immune to 3rd party cookie restrictions
+Use a strong, random `stateSecret` (32+ bytes). Store your RSA private key in a secrets manager (AWS KMS, Parameter Store, Vault, etc.). Never commit keys or secrets to source control.
 
-> **Production Note**: The quick start example uses `crypto.subtle.generateKey()` for simplicity. In production, use proper key management (AWS Parameter Store SecureString, AWS KMS, HashiCorp Vault, etc.).
+## Documentation and API reference
 
-## Examples (coming soon)
+- [API docs](https://docs.lti-tool.dev)
+- [Contributing](CONTRIBUTING.md)
+- [Issues](https://github.com/LongsightGroup/lti-tool/issues)
+- [Discussions](https://github.com/LongsightGroup/lti-tool/discussions)
 
-Examples repository coming soon. Watch this repo for updates!
+## License
 
-## Get Involved
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-**Need help?** [Open an issue](https://github.com/lti-tool/lti-tool/issues) or [start a discussion](https://github.com/lti-tool/lti-tool/discussions)
+MIT

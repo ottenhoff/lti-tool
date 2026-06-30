@@ -1,11 +1,11 @@
-# @lti-tool/d1
+# @longsightgroup/lti-tool/storage/d1
 
-Cloudflare D1 storage adapter for `@lti-tool/core`.
+Cloudflare D1 storage adapter for `@longsightgroup/lti-tool`.
 
 ## Installation
 
 ```bash
-npm install @lti-tool/d1
+npm install @longsightgroup/lti-tool drizzle-orm
 ```
 
 ## Usage
@@ -14,8 +14,8 @@ Apply the Drizzle migrations in `drizzle/` to your D1 database, then pass the
 binding to `D1Storage`.
 
 ```typescript
-import { LTITool } from '@lti-tool/core';
-import { D1Storage } from '@lti-tool/d1';
+import { LTITool } from '@longsightgroup/lti-tool';
+import { D1Storage } from '@longsightgroup/lti-tool/storage/d1';
 
 const storage = new D1Storage({
   database: env.DB,

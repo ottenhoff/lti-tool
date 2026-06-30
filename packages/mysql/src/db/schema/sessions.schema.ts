@@ -1,4 +1,4 @@
-import type { LTISession } from '@lti-tool/core';
+import type { LTISession } from '@longsightgroup/lti-tool';
 import { datetime, index, json, mysqlTable, varchar } from 'drizzle-orm/mysql-core';
 
 export const sessionsTable = mysqlTable(

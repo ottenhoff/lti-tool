@@ -1,4 +1,4 @@
-import type { LTISession } from '@lti-tool/core';
+import type { LTISession } from '@longsightgroup/lti-tool';
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const sessionsTable = sqliteTable(

@@ -1,10 +1,11 @@
 // oxlint-disable max-lines-per-function typescript/no-explicit-any
-import type { LTIClient, LTIDeployment, LTISession } from '@lti-tool/core';
+import type { LTIClient, LTIDeployment, LTISession } from '@longsightgroup/lti-tool';
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { defineStorageConformanceSuite } from '../../core/test/helpers/storageConformance.js';
 import * as schema from '../src/db/schema/index.js';
 import { PostgresStorage } from '../src/index.js';
 
@@ -77,6 +78,10 @@ beforeEach(async () => {
   await db.delete(schema.registrationSessionsTable);
 });
 
+defineStorageConformanceSuite('PostgresStorage', {
+  createStorage: () => storage,
+});
+
 describe('PostgresStorage - Client Operations', () => {
   it('should add and retrieve a client', async () => {
     const clientId = await storage.addClient(testClient);
@@ -113,13 +118,6 @@ describe('PostgresStorage - Deployment Operations', () => {
 
   beforeEach(async () => {
     clientId = await storage.addClient(testClient);
-  });
-
-  it('should add and retrieve a deployment', async () => {
-    const deploymentId = await storage.addDeployment(clientId, testDeployment);
-
-    const retrieved = await storage.getDeployment(clientId, deploymentId);
-    expect(retrieved?.deploymentId).toBe(testDeployment.deploymentId);
   });
 
   it('should list deployments', async () => {

@@ -1,22 +1,22 @@
-# @lti-tool/postgresql
+# @longsightgroup/lti-tool/storage/postgresql
 
 <p align="center">Production-ready PostgreSQL storage adapter for LTI 1.3. Includes caching and optimized for AWS Lambda.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/postgresql"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fpostgresql" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool/storage/postgresql"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fpostgresql" /></a>
 </p>
 
 ## Installation
 
 ```bash
-npm install @lti-tool/postgresql
+npm install @longsightgroup/lti-tool postgres
 ```
 
 ## Quick Start
 
 ```typescript
-import { PostgresStorage } from '@lti-tool/postgresql';
-import { LTITool } from '@lti-tool/core';
+import { PostgresStorage } from '@longsightgroup/lti-tool/storage/postgresql';
+import { LTITool } from '@longsightgroup/lti-tool';
 
 const storage = new PostgresStorage({
   connectionUrl: process.env.DATABASE_URL!,
@@ -183,7 +183,7 @@ const storage = new PostgresStorage({
 ### Long-Running Servers
 
 ```typescript
-import { PostgresStorage } from '@lti-tool/postgresql';
+import { PostgresStorage } from '@longsightgroup/lti-tool/storage/postgresql';
 
 export const storage = new PostgresStorage({
   connectionUrl: process.env.DATABASE_URL!,
@@ -209,7 +209,7 @@ process.on('SIGINT', shutdown);
 ### AWS Lambda / Serverless
 
 ```typescript
-import { PostgresStorage } from '@lti-tool/postgresql';
+import { PostgresStorage } from '@longsightgroup/lti-tool/storage/postgresql';
 
 let storage: PostgresStorage | undefined;
 

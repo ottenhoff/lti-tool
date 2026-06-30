@@ -2,7 +2,7 @@ import {
   DynamicRegistrationFormSchema,
   RegistrationRequestSchema,
   type LTIConfig,
-} from '@lti-tool/core';
+} from '@longsightgroup/lti-tool';
 import { type Handler } from 'hono';
 
 import { getLTITool } from '../../ltiTool.js';

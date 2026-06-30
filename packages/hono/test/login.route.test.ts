@@ -1,4 +1,4 @@
-import type { LTIConfig } from '@lti-tool/core';
+import type { LTIConfig } from '@longsightgroup/lti-tool';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

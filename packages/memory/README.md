@@ -1,22 +1,22 @@
-# @lti-tool/memory
+# @longsightgroup/lti-tool/storage/memory
 
 <p align="center">In-memory storage adapter for LTI 1.3. Perfect for development, testing, and proof of concept single-instance deployments.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/memory"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fmemory" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool/storage/memory"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fmemory" /></a>
 </p>
 
 ## Installation
 
 ```bash
-npm install @lti-tool/memory
+npm install @longsightgroup/lti-tool
 ```
 
 ## Quick Start
 
 ```typescript
-import { LTITool } from '@lti-tool/core';
-import { MemoryStorage } from '@lti-tool/memory';
+import { LTITool } from '@longsightgroup/lti-tool';
+import { MemoryStorage } from '@longsightgroup/lti-tool/storage/memory';
 
 // Generate keypair (use proper key management in production)
 const keyPair = await crypto.subtle.generateKey(

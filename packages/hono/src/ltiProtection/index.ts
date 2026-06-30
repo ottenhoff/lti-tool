@@ -1,4 +1,4 @@
-import type { LTIConfig, LTISession } from '@lti-tool/core';
+import type { LTIConfig, LTISession } from '@longsightgroup/lti-tool';
 import type { Context, MiddlewareHandler, Next, TypedResponse } from 'hono';
 import { endTime, startTime } from 'hono/timing';
 

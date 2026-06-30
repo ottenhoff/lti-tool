@@ -1,4 +1,4 @@
-import type { LTISession } from '@lti-tool/core';
+import type { LTISession } from '@longsightgroup/lti-tool';
 import { index, jsonb, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const sessionsTable = pgTable(

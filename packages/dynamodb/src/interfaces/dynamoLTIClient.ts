@@ -1,4 +1,4 @@
-import type { LTIClient } from '@lti-tool/core';
+import type { LTIClient } from '@longsightgroup/lti-tool';
 
 import type { DynamoBase } from './dynamoBase.js';
 

@@ -6,11 +6,16 @@ import {
   type LTILaunchConfig,
   type LTISession,
   type LTIStorage,
-} from '@lti-tool/core';
+} from '@longsightgroup/lti-tool';
 import { and, eq, gt, lt } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { Logger } from 'pino';
 import postgres from 'postgres';
+
+import {
+  createDrizzleDeploymentOps,
+  type DrizzleDeploymentOps,
+} from '#storage/drizzle-deployments';
 
 import {
   LAUNCH_CONFIG_CACHE,
@@ -33,6 +38,7 @@ export class PostgresStorage implements LTIStorage {
   private db: PostgresJsDatabase<typeof schema>;
   private sql: postgres.Sql;
   private nonceExpirationSeconds: number;
+  private deploymentOps: DrizzleDeploymentOps;
 
   constructor(config: PostgresStorageConfig) {
     this.logger =
@@ -67,6 +73,11 @@ export class PostgresStorage implements LTIStorage {
 
     // Initialize Drizzle
     this.db = drizzle(this.sql, { schema });
+    this.deploymentOps = createDrizzleDeploymentOps({
+      db: this.db,
+      table: schema.deploymentsTable,
+      executeMutation: executePromiseMutation,
+    });
 
     this.logger.debug(
       {
@@ -101,22 +112,9 @@ export class PostgresStorage implements LTIStorage {
       return undefined;
     }
 
-    // Get all deployments for this client
-    const deploymentsRaw = await this.db
-      .select()
-      .from(schema.deploymentsTable)
-      .where(eq(schema.deploymentsTable.clientId, clientId));
-
-    // Convert null to undefined for optional fields
-    const deployments = deploymentsRaw.map((d) => ({
-      ...d,
-      name: d.name ?? undefined,
-      description: d.description ?? undefined,
-    }));
-
     return {
       ...client,
-      deployments,
+      deployments: await this.listDeployments(clientId),
     };
   }
 
@@ -230,50 +228,28 @@ export class PostgresStorage implements LTIStorage {
   async listDeployments(clientId: string): Promise<LTIDeployment[]> {
     this.logger.debug({ clientId }, 'listing deployments for client');
 
-    const deploymentsRaw = await this.db
-      .select()
-      .from(schema.deploymentsTable)
-      .where(eq(schema.deploymentsTable.clientId, clientId));
-
-    // Convert null to undefined for optional fields
-    const deployments = deploymentsRaw.map((d) => ({
-      ...d,
-      name: d.name ?? undefined,
-      description: d.description ?? undefined,
-    }));
+    const deployments = await this.deploymentOps.listDeployments(clientId);
 
     this.logger.debug({ clientId, count: deployments.length }, 'deployments found');
     return deployments;
   }
 
-  async getDeployment(
+  async getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined> {
-    this.logger.debug({ clientId, deploymentId }, 'getting deployment by id');
+    this.logger.debug({ clientId, deploymentId }, 'getting deployment by platform id');
 
-    const [deployment] = await this.db
-      .select()
-      .from(schema.deploymentsTable)
-      .where(
-        and(
-          eq(schema.deploymentsTable.clientId, clientId),
-          eq(schema.deploymentsTable.id, deploymentId),
-        ),
-      )
-      .limit(1);
-
+    const deployment = await this.deploymentOps.getDeploymentByPlatformId(
+      clientId,
+      deploymentId,
+    );
     if (!deployment) {
       this.logger.warn({ clientId, deploymentId }, 'deployment not found');
       return undefined;
     }
 
-    // Convert null to undefined for optional fields
-    return {
-      ...deployment,
-      name: deployment.name ?? undefined,
-      description: deployment.description ?? undefined,
-    };
+    return deployment;
   }
 
   async addDeployment(
@@ -294,15 +270,18 @@ export class PostgresStorage implements LTIStorage {
     return inserted.id;
   }
 
-  async updateDeployment(
+  async updateDeploymentById(
     clientId: string,
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
   ): Promise<void> {
     this.logger.info({ clientId, deploymentId, deployment }, 'updating deployment');
 
-    // Get existing deployment to validate it exists
-    const existing = await this.getDeployment(clientId, deploymentId);
+    const existing = await this.deploymentOps.updateDeploymentByInternalId(
+      clientId,
+      deploymentId,
+      deployment,
+    );
     if (!existing) throw new Error('Deployment not found');
 
     // Check if LMS deployment id changed (affects launch config cache)
@@ -317,20 +296,16 @@ export class PostgresStorage implements LTIStorage {
       }
     }
 
-    // Update deployment data
-    await this.db
-      .update(schema.deploymentsTable)
-      .set(deployment)
-      .where(eq(schema.deploymentsTable.id, deploymentId));
-
     this.logger.debug({ deploymentId }, 'deployment updated');
   }
 
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
+  async deleteDeploymentById(clientId: string, deploymentId: string): Promise<void> {
     this.logger.info({ clientId, deploymentId }, 'deleting deployment');
 
-    // Get deployment and client data for cache cleanup
-    const existing = await this.getDeployment(clientId, deploymentId);
+    const existing = await this.deploymentOps.deleteDeploymentByInternalId(
+      clientId,
+      deploymentId,
+    );
     if (!existing) {
       this.logger.warn({ clientId, deploymentId }, 'deployment not found for deletion');
       return;
@@ -341,10 +316,6 @@ export class PostgresStorage implements LTIStorage {
       const cacheKey = `${client.iss}#${client.clientId}#${existing.deploymentId}`;
       LAUNCH_CONFIG_CACHE.delete(cacheKey);
     }
-
-    await this.db
-      .delete(schema.deploymentsTable)
-      .where(eq(schema.deploymentsTable.id, deploymentId));
 
     this.logger.debug({ clientId, deploymentId }, 'deployment deleted');
   }
@@ -628,4 +599,8 @@ export class PostgresStorage implements LTIStorage {
     await this.sql.end();
     this.logger.debug('PostgreSQL connection pool closed');
   }
+}
+
+async function executePromiseMutation(query: unknown): Promise<void> {
+  await Promise.resolve(query);
 }

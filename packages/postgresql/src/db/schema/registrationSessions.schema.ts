@@ -1,4 +1,4 @@
-import type { LTIDynamicRegistrationSession } from '@lti-tool/core';
+import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
 import { index, jsonb, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const registrationSessionsTable = pgTable(

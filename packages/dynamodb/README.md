@@ -1,22 +1,22 @@
-# @lti-tool/dynamodb
+# @longsightgroup/lti-tool/storage/dynamodb
 
 <p align="center">Production-ready DynamoDB storage adapter for LTI 1.3. Includes caching and optimized for AWS Lambda.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/dynamodb"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fdynamodb" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool/storage/dynamodb"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fdynamodb" /></a>
 </p>
 
 ## Installation
 
 ```bash
-npm install @lti-tool/dynamodb
+npm install @longsightgroup/lti-tool @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
 ```
 
 ## Quick Start
 
 ```typescript
-import { LTITool } from '@lti-tool/core';
-import { DynamoDbStorage } from '@lti-tool/dynamodb';
+import { LTITool } from '@longsightgroup/lti-tool';
+import { DynamoDbStorage } from '@longsightgroup/lti-tool/storage/dynamodb';
 
 const storage = new DynamoDbStorage({
   controlPlaneTable: 'lti-tool-control',

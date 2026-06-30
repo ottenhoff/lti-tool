@@ -5,7 +5,7 @@ import type {
   LTILaunchConfig,
   LTISession,
   LTIStorage,
-} from '@lti-tool/core';
+} from '@longsightgroup/lti-tool';
 import type { Logger } from 'pino';
 
 import type { MemoryStorageConfig } from './interfaces/memoryStorageConfig.js';
@@ -37,7 +37,7 @@ export class MemoryStorage implements LTIStorage {
   private clientLookup = new Map<string, string>(); // issuer#clientId -> internalClientId
 
   private sessions = new Map<string, LTISession>();
-  private nonces = new Map<string, Date>(); // nonce -> expiration date
+  private usedNonces = new Set<string>();
   private registrationSessions = new Map<string, LTIDynamicRegistrationSession>();
   private logger: Logger;
 
@@ -50,14 +50,6 @@ export class MemoryStorage implements LTIStorage {
         warn: () => {},
         error: () => {},
       } as unknown as Logger);
-  }
-
-  getDeploymentById(
-    // oxlint-disable-next-line no-unused-vars
-    clientId: string, // oxlint-disable no-unused-vars
-    deploymentId: string,
-  ): Promise<LTIDeployment | undefined> {
-    return this.getDeployment(clientId, deploymentId);
   }
 
   // oxlint-disable-next-line require-await
@@ -121,7 +113,7 @@ export class MemoryStorage implements LTIStorage {
   }
 
   // oxlint-disable-next-line require-await
-  async getDeployment(
+  async getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined> {
@@ -153,42 +145,63 @@ export class MemoryStorage implements LTIStorage {
   }
 
   // oxlint-disable-next-line require-await
-  async updateDeployment(
+  async updateDeploymentById(
     clientId: string,
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
   ): Promise<void> {
-    this.logger.warn({ deploymentId, deployment }, 'updateDeployment not implemented');
+    const client = this.clients.get(clientId);
+    if (!client) {
+      throw new Error(`Client not found: ${clientId}`);
+    }
+
+    const existing = client.deployments.find(
+      (candidate) => candidate.id === deploymentId,
+    );
+    if (!existing) {
+      throw new Error('Deployment not found');
+    }
+
+    const updated = { ...existing, ...deployment, id: existing.id };
+    const oldCompositeKey = `${client.iss}#${client.clientId}#${existing.deploymentId}`;
+    const newCompositeKey = `${client.iss}#${client.clientId}#${updated.deploymentId}`;
+    const index = client.deployments.findIndex(
+      (candidate) => candidate.id === deploymentId,
+    );
+    client.deployments[index] = updated;
+    this.deployments.delete(oldCompositeKey);
+    this.deployments.set(newCompositeKey, updated);
   }
 
   // oxlint-disable-next-line require-await
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
-    this.logger.warn({ clientId, deploymentId }, 'deleteDeployment not implemented');
+  async deleteDeploymentById(clientId: string, deploymentId: string): Promise<void> {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    const existing = client.deployments.find(
+      (candidate) => candidate.id === deploymentId,
+    );
+    if (!existing) return;
+
+    client.deployments = client.deployments.filter(
+      (candidate) => candidate.id !== deploymentId,
+    );
+    this.deployments.delete(`${client.iss}#${client.clientId}#${existing.deploymentId}`);
   }
 
   // oxlint-disable-next-line require-await
   async storeNonce(nonce: string, expiresAt: Date): Promise<void> {
-    this.nonces.set(nonce, expiresAt);
-    this.logger.debug({ nonce, expiresAt }, 'nonce stored with expiration');
+    this.logger.trace({ nonce, expiresAt }, 'nonce will be validated on use');
   }
 
   // oxlint-disable-next-line require-await
   async validateNonce(nonce: string): Promise<boolean> {
-    const expiresAt = this.nonces.get(nonce);
-
-    if (!expiresAt) {
-      this.logger.warn({ nonce }, 'nonce not found - invalid nonce');
+    if (this.usedNonces.has(nonce)) {
+      this.logger.warn({ nonce }, 'nonce already used - replay attack detected');
       return false;
     }
 
-    if (expiresAt < new Date()) {
-      this.logger.warn({ nonce, expiresAt }, 'nonce expired');
-      this.nonces.delete(nonce); // Clean up expired nonce
-      return false;
-    }
-
-    // Mark as used by deleting it (one-time use)
-    this.nonces.delete(nonce);
+    this.usedNonces.add(nonce);
     this.logger.debug({ nonce }, 'nonce validated and consumed');
     return true;
   }
@@ -234,7 +247,10 @@ export class MemoryStorage implements LTIStorage {
       return undefined;
     }
 
-    const deployment = client.deployments.find((d) => d.deploymentId === deploymentId);
+    const deployment = await this.getDeploymentByPlatformId(
+      clientInternalId,
+      deploymentId,
+    );
     if (!deployment) {
       this.logger.warn({ deploymentId }, 'deployment not found');
       return undefined;

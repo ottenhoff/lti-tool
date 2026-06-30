@@ -11,13 +11,12 @@ const createMockStorage = (): LTIStorage => ({
   updateClient: vi.fn(),
   deleteClient: vi.fn(),
   listDeployments: vi.fn(),
-  getDeployment: vi.fn(),
+  getDeploymentByPlatformId: vi.fn(),
   addDeployment: vi.fn(),
-  updateDeployment: vi.fn(),
-  deleteDeployment: vi.fn(),
+  updateDeploymentById: vi.fn(),
+  deleteDeploymentById: vi.fn(),
   getSession: vi.fn(),
   addSession: vi.fn(),
-  storeNonce: vi.fn(),
   validateNonce: vi.fn(),
   getLaunchConfig: vi.fn(),
   saveLaunchConfig: vi.fn(),
@@ -111,6 +110,11 @@ describe('LTITool launch registration upsert', () => {
         name: 'Existing Deployment',
       },
     ]);
+    vi.mocked(storage.getDeploymentByPlatformId).mockResolvedValue({
+      id: 'deployment-internal-1',
+      deploymentId: 'platform-deployment-id',
+      name: 'Existing Deployment',
+    });
 
     const result = await ltiTool.upsertLaunchRegistration({
       iss: 'https://platform.example.com',
@@ -123,6 +127,10 @@ describe('LTITool launch registration upsert', () => {
 
     expect(storage.addClient).not.toHaveBeenCalled();
     expect(storage.addDeployment).not.toHaveBeenCalled();
+    expect(storage.getDeploymentByPlatformId).toHaveBeenCalledWith(
+      'client-internal-1',
+      'platform-deployment-id',
+    );
     expect(storage.updateClient).toHaveBeenCalledWith('client-internal-1', {
       name: 'Existing Platform',
       iss: 'https://platform.example.com',

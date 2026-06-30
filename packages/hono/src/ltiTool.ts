@@ -1,4 +1,4 @@
-import { type LTIConfig, LTITool } from '@lti-tool/core';
+import { type LTIConfig, LTITool } from '@longsightgroup/lti-tool';
 
 // simple singleton pattern for now
 let _ltiTool: LTITool | undefined;

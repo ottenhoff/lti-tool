@@ -1,22 +1,22 @@
-# @lti-tool/mysql
+# @longsightgroup/lti-tool/storage/mysql
 
 <p align="center">Production-ready MySQL storage adapter for LTI 1.3. Includes caching and optimized for AWS Lambda.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/mysql"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fmysql" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool/storage/mysql"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fmysql" /></a>
 </p>
 
 ## Installation
 
 ```bash
-npm install @lti-tool/mysql
+npm install @longsightgroup/lti-tool mysql2
 ```
 
 ## Quick Start
 
 ```typescript
-import { MySqlStorage } from '@lti-tool/mysql';
-import { LTITool } from '@lti-tool/core';
+import { MySqlStorage } from '@longsightgroup/lti-tool/storage/mysql';
+import { LTITool } from '@longsightgroup/lti-tool';
 
 const storage = new MySqlStorage({
   connectionUrl: process.env.DATABASE_URL!,
@@ -182,7 +182,7 @@ const storage = new MySqlStorage({
 ### Long-Running Servers
 
 ```typescript
-import { MySqlStorage } from '@lti-tool/mysql';
+import { MySqlStorage } from '@longsightgroup/lti-tool/storage/mysql';
 
 export const storage = new MySqlStorage({
   connectionUrl: process.env.DATABASE_URL!,
@@ -208,7 +208,7 @@ process.on('SIGINT', shutdown);
 ### AWS Lambda / Serverless
 
 ```typescript
-import { MySqlStorage } from '@lti-tool/mysql';
+import { MySqlStorage } from '@longsightgroup/lti-tool/storage/mysql';
 
 let storage: MySqlStorage | undefined;
 

@@ -1,4 +1,4 @@
-import type { LTIDynamicRegistrationSession } from '@lti-tool/core';
+import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const registrationSessionsTable = sqliteTable(

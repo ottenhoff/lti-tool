@@ -1,4 +1,4 @@
-import packageJson from '../../package.json' with { type: 'json' };
+import packageJson from '../../../../package.json' with { type: 'json' };
 
 /**
  * Wrapper around fetch() that automatically adds User-Agent header for LTI service requests.
@@ -31,7 +31,7 @@ export async function ltiServiceFetch(
   if (!headers.has('User-Agent')) {
     headers.set(
       'User-Agent',
-      `lti-tool/${packageJson.version} (https://github.com/lti-tool/lti-tool)`,
+      `@longsightgroup/lti-tool/${packageJson.version} (https://github.com/LongsightGroup/lti-tool)`,
     );
   }
   // Call fetch with merged headers

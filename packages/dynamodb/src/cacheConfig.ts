@@ -1,4 +1,4 @@
-import type { LTILaunchConfig, LTISession } from '@lti-tool/core';
+import type { LTILaunchConfig, LTISession } from '@longsightgroup/lti-tool';
 import { LRUCache } from 'lru-cache';
 
 export const LAUNCH_CONFIG_CACHE = new LRUCache<

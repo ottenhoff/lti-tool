@@ -5,7 +5,7 @@ import {
   renderLtiPostMessageStorageRedirectPage,
   type LTI13LoginInitiation,
   type LTIConfig,
-} from '@lti-tool/core';
+} from '@longsightgroup/lti-tool';
 import { type Context, type Handler } from 'hono';
 import { ZodError } from 'zod';
 

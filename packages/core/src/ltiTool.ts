@@ -163,13 +163,14 @@ const upsertLaunchRegistrationDeployment = async (
   deployments: LTIDeployment[];
   createdDeployment: boolean;
 }> => {
-  const deployments = await storage.listDeployments(clientId);
-  const existingDeployment = deployments.find(
-    (deployment) => deployment.deploymentId === registration.deploymentId,
+  const existingDeployment = await storage.getDeploymentByPlatformId(
+    clientId,
+    registration.deploymentId,
   );
   const deploymentInput = launchRegistrationDeploymentInput(registration);
 
   if (existingDeployment === undefined) {
+    const deployments = await storage.listDeployments(clientId);
     const deployment = {
       id: await storage.addDeployment(clientId, deploymentInput),
       ...deploymentInput,
@@ -182,12 +183,13 @@ const upsertLaunchRegistrationDeployment = async (
   }
 
   const deployment = { ...existingDeployment, ...deploymentInput };
+  const deployments = await storage.listDeployments(clientId);
 
   if (
     registration.deploymentName !== undefined ||
     registration.deploymentDescription !== undefined
   ) {
-    await storage.updateDeployment(clientId, existingDeployment.id, deploymentInput);
+    await storage.updateDeploymentById(clientId, existingDeployment.id, deploymentInput);
   }
 
   return {
@@ -374,11 +376,6 @@ export class LTITool {
       const validatedParams = HandleLoginParamsSchema.parse(params);
 
       const nonce = crypto.randomUUID();
-
-      // Store nonce with expiration for replay attack prevention
-      const nonceExpirationSeconds = this.config.security?.nonceExpirationSeconds ?? 600;
-      const nonceExpiresAt = new Date(Date.now() + nonceExpirationSeconds * 1000);
-      await this.config.storage.storeNonce(nonce, nonceExpiresAt);
 
       const state = await new SignJWT({
         nonce,
@@ -1323,12 +1320,12 @@ export class LTITool {
    * @param deploymentId - Deployment identifier
    * @returns Deployment configuration if found, undefined otherwise
    */
-  async getDeployment(
+  async getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined> {
     try {
-      return await this.config.storage.getDeployment(clientId, deploymentId);
+      return await this.config.storage.getDeploymentByPlatformId(clientId, deploymentId);
     } catch (error) {
       throw new Error(
         `[Deployment] Retrieval failed for client '${clientId}', deployment '${deploymentId}': ${formatError(error)}`,
@@ -1363,13 +1360,13 @@ export class LTITool {
    * @param deploymentId - Deployment identifier
    * @param deployment - Partial deployment object with fields to update
    */
-  async updateDeployment(
+  async updateDeploymentById(
     clientId: string,
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
   ): Promise<void> {
     try {
-      return await this.config.storage.updateDeployment(
+      return await this.config.storage.updateDeploymentById(
         clientId,
         deploymentId,
         deployment,
@@ -1387,9 +1384,9 @@ export class LTITool {
    * @param clientId - Client identifier
    * @param deploymentId - Deployment identifier to remove
    */
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
+  async deleteDeploymentById(clientId: string, deploymentId: string): Promise<void> {
     try {
-      return await this.config.storage.deleteDeployment(clientId, deploymentId);
+      return await this.config.storage.deleteDeploymentById(clientId, deploymentId);
     } catch (error) {
       throw new Error(
         `[Deployment] Deletion failed for client '${clientId}', deployment '${deploymentId}': ${formatError(error)}`,

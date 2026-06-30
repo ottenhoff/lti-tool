@@ -5,16 +5,19 @@ import type {
   LTILaunchConfig,
   LTISession,
   LTIStorage,
-} from '@lti-tool/core';
-import { and, eq, gt, isNull, lte } from 'drizzle-orm';
+} from '@longsightgroup/lti-tool';
+import { and, eq, gt, lte } from 'drizzle-orm';
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
 import type { Logger } from 'pino';
 
-import { SESSION_TTL } from './cacheConfig.js';
+import {
+  createDrizzleDeploymentOps,
+  type DrizzleDeploymentOps,
+} from '#storage/drizzle-deployments';
+
+import { NONCE_TTL, SESSION_TTL } from './cacheConfig.js';
 import * as schema from './db/schema/index.js';
 import type { D1StorageConfig } from './interfaces/d1StorageConfig.js';
-
-type DeploymentRow = typeof schema.deploymentsTable.$inferSelect;
 
 /**
  * Cloudflare D1 implementation of LTI storage interface.
@@ -28,6 +31,7 @@ type DeploymentRow = typeof schema.deploymentsTable.$inferSelect;
 export class D1Storage implements LTIStorage {
   private logger: Logger;
   private db: DrizzleD1Database<typeof schema>;
+  private deploymentOps: DrizzleDeploymentOps;
 
   constructor(config: D1StorageConfig) {
     this.logger =
@@ -40,6 +44,11 @@ export class D1Storage implements LTIStorage {
       } as unknown as Logger);
 
     this.db = drizzle(config.database, { schema });
+    this.deploymentOps = createDrizzleDeploymentOps({
+      db: this.db,
+      table: schema.deploymentsTable,
+      executeMutation: executeD1Mutation,
+    });
   }
 
   async listClients(): Promise<Omit<LTIClient, 'deployments'>[]> {
@@ -124,36 +133,19 @@ export class D1Storage implements LTIStorage {
       .run();
   }
 
-  async listDeployments(clientId: string): Promise<LTIDeployment[]> {
+  listDeployments(clientId: string): Promise<LTIDeployment[]> {
     this.logger.debug({ clientId }, 'listing deployments for client');
 
-    const deployments = await this.db
-      .select()
-      .from(schema.deploymentsTable)
-      .where(eq(schema.deploymentsTable.clientId, clientId))
-      .orderBy(schema.deploymentsTable.deploymentId, schema.deploymentsTable.id);
-
-    return deployments.map(mapDeploymentRow);
+    return this.deploymentOps.listDeployments(clientId);
   }
 
-  async getDeployment(
+  getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined> {
     this.logger.debug({ clientId, deploymentId }, 'getting deployment by platform id');
 
-    const [deployment] = await this.db
-      .select()
-      .from(schema.deploymentsTable)
-      .where(
-        and(
-          eq(schema.deploymentsTable.clientId, clientId),
-          eq(schema.deploymentsTable.deploymentId, deploymentId),
-        ),
-      )
-      .limit(1);
-
-    return deployment ? mapDeploymentRow(deployment) : undefined;
+    return this.deploymentOps.getDeploymentByPlatformId(clientId, deploymentId);
   }
 
   async addDeployment(
@@ -177,7 +169,7 @@ export class D1Storage implements LTIStorage {
     return deploymentInternalId;
   }
 
-  async updateDeployment(
+  async updateDeploymentById(
     clientId: string,
     deploymentInternalId: string,
     deployment: Partial<LTIDeployment>,
@@ -187,42 +179,21 @@ export class D1Storage implements LTIStorage {
       'updating deployment',
     );
 
-    const existing = await this.getDeploymentByInternalId(clientId, deploymentInternalId);
+    const existing = await this.deploymentOps.updateDeploymentByInternalId(
+      clientId,
+      deploymentInternalId,
+      deployment,
+    );
     if (!existing) throw new Error('Deployment not found');
-
-    const updated = {
-      ...existing,
-      ...deployment,
-    };
-
-    await this.db
-      .update(schema.deploymentsTable)
-      .set({
-        deploymentId: updated.deploymentId,
-        name: updated.name ?? null,
-        description: updated.description ?? null,
-      })
-      .where(
-        and(
-          eq(schema.deploymentsTable.clientId, clientId),
-          eq(schema.deploymentsTable.id, deploymentInternalId),
-        ),
-      )
-      .run();
   }
 
-  async deleteDeployment(clientId: string, deploymentInternalId: string): Promise<void> {
+  async deleteDeploymentById(
+    clientId: string,
+    deploymentInternalId: string,
+  ): Promise<void> {
     this.logger.info({ clientId, deploymentInternalId }, 'deleting deployment');
 
-    await this.db
-      .delete(schema.deploymentsTable)
-      .where(
-        and(
-          eq(schema.deploymentsTable.clientId, clientId),
-          eq(schema.deploymentsTable.id, deploymentInternalId),
-        ),
-      )
-      .run();
+    await this.deploymentOps.deleteDeploymentByInternalId(clientId, deploymentInternalId);
   }
 
   async getSession(sessionId: string): Promise<LTISession | undefined> {
@@ -258,40 +229,23 @@ export class D1Storage implements LTIStorage {
     return id;
   }
 
+  // oxlint-disable-next-line require-await
   async storeNonce(nonce: string, expiresAt: Date): Promise<void> {
-    this.logger.debug({ nonce, expiresAt }, 'storing nonce');
-
-    await this.db
-      .insert(schema.noncesTable)
-      .values({
-        nonce,
-        expiresAt: expiresAt.toISOString(),
-        usedAt: null,
-      })
-      .onConflictDoUpdate({
-        target: schema.noncesTable.nonce,
-        set: {
-          expiresAt: expiresAt.toISOString(),
-          usedAt: null,
-        },
-      })
-      .run();
+    this.logger.trace({ nonce, expiresAt }, 'nonce will be validated on use');
   }
 
   async validateNonce(nonce: string): Promise<boolean> {
     this.logger.debug({ nonce }, 'validating nonce');
 
-    const now = new Date().toISOString();
+    const now = new Date();
     const result = await this.db
-      .update(schema.noncesTable)
-      .set({ usedAt: now })
-      .where(
-        and(
-          eq(schema.noncesTable.nonce, nonce),
-          isNull(schema.noncesTable.usedAt),
-          gt(schema.noncesTable.expiresAt, now),
-        ),
-      )
+      .insert(schema.noncesTable)
+      .values({
+        nonce,
+        expiresAt: new Date(now.getTime() + NONCE_TTL * 1000).toISOString(),
+        usedAt: now.toISOString(),
+      })
+      .onConflictDoNothing()
       .run();
 
     return getChangedRows(result) === 1;
@@ -429,40 +383,14 @@ export class D1Storage implements LTIStorage {
 
     return row;
   }
-
-  private async getDeploymentByInternalId(
-    clientId: string,
-    deploymentInternalId: string,
-  ): Promise<LTIDeployment | undefined> {
-    this.logger.debug(
-      { clientId, deploymentInternalId },
-      'getting deployment by internal id',
-    );
-
-    const [deployment] = await this.db
-      .select()
-      .from(schema.deploymentsTable)
-      .where(
-        and(
-          eq(schema.deploymentsTable.clientId, clientId),
-          eq(schema.deploymentsTable.id, deploymentInternalId),
-        ),
-      )
-      .limit(1);
-
-    return deployment ? mapDeploymentRow(deployment) : undefined;
-  }
-}
-
-function mapDeploymentRow(row: DeploymentRow): LTIDeployment {
-  return {
-    id: row.id,
-    deploymentId: row.deploymentId,
-    name: row.name ?? undefined,
-    description: row.description ?? undefined,
-  };
 }
 
 function getChangedRows(result: { meta?: { changes?: number } }): number {
   return result.meta?.changes ?? 0;
+}
+
+async function executeD1Mutation(query: unknown): Promise<void> {
+  // SAFETY: createDrizzleDeploymentOps only passes Drizzle D1 mutation builders
+  // to this callback for this adapter.
+  await (query as { readonly run: () => Promise<unknown> }).run();
 }

@@ -1,4 +1,4 @@
-import type { LTIDynamicRegistrationSession } from '@lti-tool/core';
+import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
 import { datetime, index, json, mysqlTable, varchar } from 'drizzle-orm/mysql-core';
 
 export const registrationSessionsTable = mysqlTable(

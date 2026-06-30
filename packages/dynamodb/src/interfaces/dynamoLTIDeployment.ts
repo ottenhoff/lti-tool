@@ -1,4 +1,4 @@
-import type { LTIDeployment } from '@lti-tool/core';
+import type { LTIDeployment } from '@longsightgroup/lti-tool';
 
 import type { DynamoBase } from './dynamoBase.js';
 

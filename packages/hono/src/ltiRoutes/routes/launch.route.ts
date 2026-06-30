@@ -1,4 +1,4 @@
-import { LTI13LaunchSchema, type LTIConfig } from '@lti-tool/core';
+import { LTI13LaunchSchema, type LTIConfig } from '@longsightgroup/lti-tool';
 import { type Handler } from 'hono';
 import { ZodError } from 'zod';
 

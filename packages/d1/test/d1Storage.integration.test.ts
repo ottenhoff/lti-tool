@@ -10,10 +10,11 @@ import {
   type LTIDeployment,
   type LTIDynamicRegistrationSession,
   type LTISession,
-} from '@lti-tool/core';
+} from '@longsightgroup/lti-tool';
 import { Log, LogLevel, Miniflare } from 'miniflare';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { defineStorageConformanceSuite } from '../../core/test/helpers/storageConformance.js';
 import { D1Storage } from '../src/index.js';
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,16 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await harness?.dispose();
+});
+
+defineStorageConformanceSuite('D1Storage', {
+  createStorage: async () => {
+    const conformanceHarness = await D1StorageHarness.create();
+    return {
+      storage: conformanceHarness.storageAdapter,
+      cleanup: () => conformanceHarness.dispose(),
+    };
+  },
 });
 
 describe('D1Storage with Miniflare D1', () => {
@@ -118,91 +129,6 @@ describe('D1Storage with Miniflare D1', () => {
   });
 
   describe('deployment operations', () => {
-    it('retrieves deployments by platform deployment ID for launch verification', async () => {
-      const clientInternalId = await harness.storage<string>('addClient', testClient);
-      const deploymentInternalId = await harness.storage<string>(
-        'addDeployment',
-        clientInternalId,
-        testDeployment,
-      );
-
-      await expect(
-        harness.storage('getDeployment', clientInternalId, testDeployment.deploymentId),
-      ).resolves.toMatchObject({
-        id: deploymentInternalId,
-        deploymentId: testDeployment.deploymentId,
-      });
-      await expect(
-        harness.storage('getDeployment', clientInternalId, deploymentInternalId),
-      ).resolves.toBeNull();
-
-      await expect(
-        harness.storage(
-          'getLaunchConfig',
-          testClient.iss,
-          testClient.clientId,
-          testDeployment.deploymentId,
-        ),
-      ).resolves.toMatchObject({
-        iss: testClient.iss,
-        clientId: testClient.clientId,
-        deploymentId: testDeployment.deploymentId,
-      });
-      await expect(
-        harness.storage(
-          'getLaunchConfig',
-          testClient.iss,
-          testClient.clientId,
-          deploymentInternalId,
-        ),
-      ).resolves.toBeNull();
-    });
-
-    it('lists, updates, and deletes deployments by internal ID', async () => {
-      const clientInternalId = await harness.storage<string>('addClient', testClient);
-      const deploymentA = await harness.storage<string>(
-        'addDeployment',
-        clientInternalId,
-        {
-          deploymentId: 'z-platform-deployment',
-        },
-      );
-      const deploymentB = await harness.storage<string>(
-        'addDeployment',
-        clientInternalId,
-        {
-          deploymentId: 'a-platform-deployment',
-        },
-      );
-
-      await expect(
-        harness.storage('listDeployments', clientInternalId),
-      ).resolves.toMatchObject([
-        { id: deploymentB, deploymentId: 'a-platform-deployment' },
-        { id: deploymentA, deploymentId: 'z-platform-deployment' },
-      ]);
-
-      await harness.storage('updateDeployment', clientInternalId, deploymentA, {
-        deploymentId: 'updated-platform-deployment',
-        name: 'Updated Deployment',
-      });
-      await expect(
-        harness.storage('getDeployment', clientInternalId, 'updated-platform-deployment'),
-      ).resolves.toMatchObject({
-        id: deploymentA,
-        deploymentId: 'updated-platform-deployment',
-        name: 'Updated Deployment',
-      });
-
-      await harness.storage('deleteDeployment', clientInternalId, deploymentA);
-      await expect(
-        harness.storage('getDeployment', clientInternalId, 'updated-platform-deployment'),
-      ).resolves.toBeNull();
-      await expect(
-        harness.storage('getDeployment', clientInternalId, 'a-platform-deployment'),
-      ).resolves.toBeDefined();
-    });
-
     it('enforces one platform deployment ID per client in the local D1 schema', async () => {
       const clientInternalId = await harness.storage<string>('addClient', testClient);
       await harness.storage('addDeployment', clientInternalId, testDeployment);
@@ -214,7 +140,7 @@ describe('D1Storage with Miniflare D1', () => {
 
     it('throws when updating a missing deployment', async () => {
       await expect(
-        harness.storage('updateDeployment', 'missing-client', 'missing-deployment', {
+        harness.storage('updateDeploymentById', 'missing-client', 'missing-deployment', {
           name: 'Updated',
         }),
       ).rejects.toThrow('Deployment not found');
@@ -244,14 +170,16 @@ describe('D1Storage with Miniflare D1', () => {
 
   describe('nonce validation', () => {
     it('returns true once for an unexpired nonce and false on replay', async () => {
-      await harness.storage('storeNonce', 'nonce-id', futureIso());
-
       await expect(harness.storage('validateNonce', 'nonce-id')).resolves.toBe(true);
       await expect(harness.storage('validateNonce', 'nonce-id')).resolves.toBe(false);
     });
 
     it('returns false for expired nonces', async () => {
-      await harness.storage('storeNonce', 'expired-nonce', pastIso());
+      await harness.sql(
+        'run',
+        'INSERT INTO lti_tool_nonces (nonce, expires_at) VALUES (?, ?)',
+        ['expired-nonce', pastIso()],
+      );
 
       await expect(harness.storage('validateNonce', 'expired-nonce')).resolves.toBe(
         false,
@@ -392,7 +320,7 @@ class D1StorageHarness {
   private constructor(
     private mf: Miniflare,
     private database: Awaited<ReturnType<Miniflare['getD1Database']>>,
-    private storageAdapter: D1Storage,
+    readonly storageAdapter: D1Storage,
   ) {}
 
   static async create(): Promise<D1StorageHarness> {

@@ -7,8 +7,12 @@
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
+    "rootDir": ".",
+    "outDir": "./dist",
+    "customConditions": ["source"],
     "lib": ["ES2024", "WebWorker", "DOM", "DOM.Iterable"]
   },
+  "include": ["packages/*/src/**/*", "packages/*/test/**/*.ts"],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,

@@ -41,13 +41,12 @@ const createMockStorage = (): LTIStorage => ({
   updateClient: vi.fn(),
   deleteClient: vi.fn(),
   listDeployments: vi.fn(),
-  getDeployment: vi.fn(),
+  getDeploymentByPlatformId: vi.fn(),
   addDeployment: vi.fn(),
-  updateDeployment: vi.fn(),
-  deleteDeployment: vi.fn(),
+  updateDeploymentById: vi.fn(),
+  deleteDeploymentById: vi.fn(),
   getSession: vi.fn(),
   addSession: vi.fn().mockResolvedValue('session-id'),
-  storeNonce: vi.fn(),
   validateNonce: vi.fn(),
   getLaunchConfig: vi.fn(),
   saveLaunchConfig: vi.fn(),
@@ -100,7 +99,7 @@ describe('LTI Integration Tests', () => {
       jwksUrl: 'https://platform.example.com/.well-known/jwks',
       deployments: [],
     });
-    vi.mocked(mockStorage.getDeployment).mockResolvedValue({
+    vi.mocked(mockStorage.getDeploymentByPlatformId).mockResolvedValue({
       id: 'deployment-internal-1',
       deploymentId: 'deployment1',
     });
@@ -171,12 +170,6 @@ describe('LTI Integration Tests', () => {
       expect(url.searchParams.get('lti_message_hint')).toBe('hint123');
       expect(url.searchParams.get('state')).toBeTruthy();
       expect(url.searchParams.get('nonce')).toBeTruthy();
-
-      // Verify nonce was stored
-      expect(mockStorage.storeNonce).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Date),
-      );
     });
 
     it('throws error when launch config not found', async () => {
@@ -443,7 +436,7 @@ describe('LTI Integration Tests', () => {
         'deployment1',
       );
       expect(mockStorage.getClientById).not.toHaveBeenCalled();
-      expect(mockStorage.getDeployment).not.toHaveBeenCalled();
+      expect(mockStorage.getDeploymentByPlatformId).not.toHaveBeenCalled();
     });
 
     it('reports missing launch endpoints precisely', async () => {

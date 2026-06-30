@@ -18,7 +18,7 @@ import type {
   LTILaunchConfig,
   LTISession,
   LTIStorage,
-} from '@lti-tool/core';
+} from '@longsightgroup/lti-tool';
 import type { Logger } from 'pino';
 
 import {
@@ -220,7 +220,7 @@ export class DynamoDbStorage implements LTIStorage {
     }
 
     // 1. delete all launch configs
-    this.deleteAllClientLaunchConfigs(existing.iss, existing.clientId);
+    await this.deleteAllClientLaunchConfigs(existing.iss, existing.clientId);
 
     // 2. query to get all items for this client
     const pk = this.createClientPK(clientId);
@@ -291,11 +291,20 @@ export class DynamoDbStorage implements LTIStorage {
     return deployments;
   }
 
-  async getDeployment(
+  async getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined> {
-    this.logger.debug({ clientId, deploymentId }, 'getting deployment by id');
+    this.logger.debug({ clientId, deploymentId }, 'getting deployment by platform id');
+    const deployments = await this.listDeployments(clientId);
+    return deployments.find((deployment) => deployment.deploymentId === deploymentId);
+  }
+
+  private async getDeploymentByInternalId(
+    clientId: string,
+    deploymentId: string,
+  ): Promise<LTIDeployment | undefined> {
+    this.logger.debug({ clientId, deploymentId }, 'getting deployment by internal id');
 
     const pk = this.createClientPK(clientId);
     const result = await this.ddbClient.send(
@@ -350,7 +359,7 @@ export class DynamoDbStorage implements LTIStorage {
     return deploymentInternalId;
   }
 
-  async updateDeployment(
+  async updateDeploymentById(
     clientId: string,
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
@@ -358,7 +367,7 @@ export class DynamoDbStorage implements LTIStorage {
     this.logger.info({ clientId, deploymentId, deployment }, 'updating deployment');
 
     // Get existing deployment to validate it exists
-    const existing = await this.getDeployment(clientId, deploymentId);
+    const existing = await this.getDeploymentByInternalId(clientId, deploymentId);
     if (!existing) throw new Error('Deployment not found');
 
     // check if LMS deployment id changed (affects launch config SK)
@@ -395,11 +404,11 @@ export class DynamoDbStorage implements LTIStorage {
     await this.saveLaunchConfig(launchConfig);
   }
 
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
+  async deleteDeploymentById(clientId: string, deploymentId: string): Promise<void> {
     this.logger.info({ clientId, deploymentId }, 'deleting deployment');
 
     // get deployment and client data for launch config deletion
-    const existing = await this.getDeployment(clientId, deploymentId);
+    const existing = await this.getDeploymentByInternalId(clientId, deploymentId);
     if (!existing) {
       this.logger.warn({ clientId, deploymentId }, 'deployment not found for deletion');
       return;

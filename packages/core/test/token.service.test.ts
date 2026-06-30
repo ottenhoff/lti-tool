@@ -109,7 +109,9 @@ describe('TokenService', () => {
       const [_url, options] = mockFetch.mock.calls[0];
       const headers = options.headers as Headers;
       expect(headers.get('Content-Type')).toBe('application/x-www-form-urlencoded');
-      expect(headers.get('User-Agent')).toMatch(/^lti-tool\/\d+\.\d+\.\d+/);
+      expect(headers.get('User-Agent')).toMatch(
+        /^@longsightgroup\/lti-tool\/\d+\.\d+\.\d+/,
+      );
 
       // Verify URLSearchParams content
       const fetchCall = mockFetch.mock.calls[0];
