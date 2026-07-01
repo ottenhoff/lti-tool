@@ -30,7 +30,10 @@ function launchRequestBody(): string {
   }).toString();
 }
 
-function createToolPort(session: LTISession): LtiToolPort {
+function createToolPort(
+  session: LTISession,
+  verifyLaunchResult?: LtiLaunchVerificationResult,
+): LtiToolPort {
   const launch = testVerifiedLaunch();
 
   function verifyLaunch(
@@ -50,6 +53,10 @@ function createToolPort(session: LTISession): LtiToolPort {
     | LtiLaunchVerificationResult
     | LtiLaunchVerificationResult<LtiAuthorizedLaunch<TAuthorization>>
   > {
+    if (verifyLaunchResult) {
+      return verifyLaunchResult;
+    }
+
     if (!options?.authorizeVerifiedLaunch) {
       return { success: true, launch };
     }
@@ -163,5 +170,35 @@ describe('customLaunchRouteHandler', () => {
 
     expect(response.status).toBe(418);
     expect(await response.text()).toBe('custom error');
+  });
+
+  it('maps incomplete launch config to not implemented without a hook', async () => {
+    const response = await requestLaunch(
+      createToolPort(testSession(), {
+        success: false,
+        error: new LtiLaunchVerificationError(
+          'launch_config_missing_token_endpoint',
+          'Launch config is missing a token endpoint',
+        ),
+      }),
+    );
+
+    expect(response.status).toBe(501);
+    expect(await response.json()).toEqual({ error: 'Not implemented' });
+  });
+
+  it('lets onVerificationFailure override default verification errors', async () => {
+    const response = await requestLaunch(
+      createToolPort(testSession(), {
+        success: false,
+        error: new LtiLaunchVerificationError('nonce_replay', 'Nonce replay'),
+      }),
+      {
+        onVerificationFailure: () => new Response('verification failed', { status: 418 }),
+      },
+    );
+
+    expect(response.status).toBe(418);
+    expect(await response.text()).toBe('verification failed');
   });
 });

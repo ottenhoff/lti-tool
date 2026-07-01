@@ -61,4 +61,24 @@ describe('launchRouteHandler', () => {
     expect(await response.json()).toEqual({ error: 'Internal server error' });
     expect(createSessionFromVerifiedLaunch).not.toHaveBeenCalled();
   });
+
+  it('maps incomplete launch config to not implemented', async () => {
+    const createSessionFromVerifiedLaunch = vi.fn();
+    const response = await requestLaunch({
+      verifyLaunch: () =>
+        Promise.resolve({
+          success: false,
+          error: new LtiLaunchVerificationError(
+            'launch_config_missing_jwks_endpoint',
+            'Launch config is missing a JWKS endpoint',
+          ),
+        }),
+      createSessionFromVerifiedLaunch,
+      logger: createNoopLogger(),
+    });
+
+    expect(response.status).toBe(501);
+    expect(await response.json()).toEqual({ error: 'Not implemented' });
+    expect(createSessionFromVerifiedLaunch).not.toHaveBeenCalled();
+  });
 });

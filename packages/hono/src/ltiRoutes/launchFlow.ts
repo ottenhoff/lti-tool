@@ -1,11 +1,28 @@
 import {
   LTI13LaunchSchema,
+  type LtiLaunchVerificationError,
   type LtiLaunchVerificationErrorCode,
   type LtiLaunchVerificationResult,
   type LtiVerifiedLaunch,
   type LTISession,
 } from '@longsightgroup/lti-tool';
 import type { Context } from 'hono';
+
+export type LaunchVerificationFailureContext = {
+  readonly hono: Context;
+  readonly error: LtiLaunchVerificationError;
+};
+
+export type LaunchVerificationFailureHandler = (
+  context: LaunchVerificationFailureContext,
+) => Response | Promise<Response>;
+
+export type LtiLaunchVerificationRequestDeps<TLaunch extends LtiVerifiedLaunch> = Pick<
+  LtiLaunchFlowDeps<TLaunch>,
+  'verifyLaunch'
+> & {
+  readonly onVerificationFailure?: LaunchVerificationFailureHandler;
+};
 
 export type LtiLaunchFlowDeps<TLaunch extends LtiVerifiedLaunch> = {
   readonly verifyLaunch: (
@@ -38,7 +55,7 @@ export type LtiLaunchFlowResult<TLaunch extends LtiVerifiedLaunch> =
 
 export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
   c: Context,
-  deps: Pick<LtiLaunchFlowDeps<TLaunch>, 'verifyLaunch'>,
+  deps: LtiLaunchVerificationRequestDeps<TLaunch>,
 ): Promise<LtiLaunchVerificationFlowResult<TLaunch>> {
   const formData = await c.req.formData();
   const { id_token, state } = LTI13LaunchSchema.parse({
@@ -48,13 +65,12 @@ export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
 
   const verification = await deps.verifyLaunch(id_token, state);
   if (!verification.success) {
-    const status = launchVerificationErrorStatus(verification.error.code);
+    const response = deps.onVerificationFailure
+      ? await deps.onVerificationFailure({ hono: c, error: verification.error })
+      : defaultLaunchVerificationFailureResponse(c, verification.error);
     return {
       success: false,
-      response: c.json(
-        { error: status === 401 ? 'Authentication failed' : 'Internal server error' },
-        status,
-      ),
+      response,
     };
   }
 
@@ -62,6 +78,14 @@ export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
     success: true,
     launch: verification.launch,
   };
+}
+
+export function defaultLaunchVerificationFailureResponse(
+  c: Context,
+  error: LtiLaunchVerificationError,
+): Response {
+  const status = launchVerificationErrorStatus(error.code);
+  return c.json({ error: launchVerificationErrorMessage(status) }, status);
 }
 
 export async function verifyLaunchSession<TLaunch extends LtiVerifiedLaunch>(
@@ -78,12 +102,15 @@ export async function verifyLaunchSession<TLaunch extends LtiVerifiedLaunch>(
   };
 }
 
-function launchVerificationErrorStatus(code: LtiLaunchVerificationErrorCode): 401 | 500 {
+function launchVerificationErrorStatus(
+  code: LtiLaunchVerificationErrorCode,
+): 401 | 500 | 501 {
   switch (code) {
-    case 'launch_config_invalid':
-    case 'launch_config_lookup_failed':
     case 'launch_config_missing_jwks_endpoint':
     case 'launch_config_missing_token_endpoint':
+      return 501;
+    case 'launch_config_invalid':
+    case 'launch_config_lookup_failed':
     case 'unknown_error':
       return 500;
     case 'invalid_audience':
@@ -104,5 +131,16 @@ function launchVerificationErrorStatus(code: LtiLaunchVerificationErrorCode): 40
     case 'untrusted_audience':
     case 'verified_launch_authorization_failed':
       return 401;
+  }
+}
+
+function launchVerificationErrorMessage(status: 401 | 500 | 501): string {
+  switch (status) {
+    case 401:
+      return 'Authentication failed';
+    case 501:
+      return 'Not implemented';
+    case 500:
+      return 'Internal server error';
   }
 }

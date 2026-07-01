@@ -4,6 +4,7 @@ import {
   type LtiAdvantagePort,
   type LtiAuthorizedLaunch,
   type LtiLaunchVerificationResult,
+  type LtiLogger,
   type LtiToolPort,
   type LtiVerifiedLaunch,
   type LtiVerifiedLaunchAuthorizationResult,
@@ -12,10 +13,12 @@ import {
   type LTISession,
 } from '@longsightgroup/lti-tool';
 import { type Context, type Handler } from 'hono';
-import type { LtiLogger } from '@longsightgroup/lti-tool';
 import { ZodError } from 'zod';
 
-import { verifyLaunchRequest } from '../launchFlow.js';
+import {
+  verifyLaunchRequest,
+  type LaunchVerificationFailureHandler,
+} from '../launchFlow.js';
 
 type CustomLaunchContext<TLaunch extends LtiVerifiedLaunch> = {
   readonly hono: Context;
@@ -69,6 +72,7 @@ type CustomLaunchRendererOptions<TLaunch extends LtiVerifiedLaunch> = {
   readonly renderDeepLinkingRequest: (
     context: CustomDeepLinkingLaunchContext<TLaunch>,
   ) => CustomLaunchResponse;
+  readonly onVerificationFailure?: LaunchVerificationFailureHandler;
   readonly onError?: (context: CustomLaunchErrorContext) => CustomLaunchResponse;
 };
 
@@ -126,7 +130,10 @@ function createCustomLaunchRouteHandler<TLaunch extends LtiVerifiedLaunch>(
 ): Handler {
   return async (c) => {
     try {
-      const verification = await verifyLaunchRequest(c, { verifyLaunch });
+      const verification = await verifyLaunchRequest(c, {
+        verifyLaunch,
+        onVerificationFailure: options.onVerificationFailure,
+      });
       if (!verification.success) return verification.response;
 
       const session = await options.ltiTool.createSessionFromVerifiedLaunch(
@@ -144,19 +151,7 @@ function createCustomLaunchRouteHandler<TLaunch extends LtiVerifiedLaunch>(
 
       await options.onVerifiedLaunch?.(context);
 
-      switch (message.kind) {
-        case 'resource-link':
-          return await options.renderResourceLink({ ...context, message });
-        case 'deep-linking':
-          return await options.renderDeepLinkingRequest({ ...context, message });
-        default: {
-          const unsupported: never = message;
-          throw new LtiLaunchMessageResolutionError(
-            'unsupported_message_type',
-            `Unsupported LTI launch message kind: ${String(unsupported)}`,
-          );
-        }
-      }
+      return await renderCustomLaunchMessage(options, context);
     } catch (error) {
       options.logger.error({ error, path: c.req.path }, 'Custom launch endpoint error');
       if (options.onError) return await options.onError({ hono: c, error });
@@ -169,4 +164,23 @@ function createCustomLaunchRouteHandler<TLaunch extends LtiVerifiedLaunch>(
       return c.json({ error: 'Internal server error' }, 500);
     }
   };
+}
+
+async function renderCustomLaunchMessage<TLaunch extends LtiVerifiedLaunch>(
+  options: CustomLaunchRendererOptions<TLaunch>,
+  context: CustomVerifiedLaunchContext<TLaunch>,
+): Promise<Response> {
+  switch (context.message.kind) {
+    case 'resource-link':
+      return await options.renderResourceLink({ ...context, message: context.message });
+    case 'deep-linking':
+      return await options.renderDeepLinkingRequest({ ...context, message: context.message });
+    default: {
+      const unsupported: never = context.message;
+      throw new LtiLaunchMessageResolutionError(
+        'unsupported_message_type',
+        `Unsupported LTI launch message kind: ${String(unsupported)}`,
+      );
+    }
+  }
 }

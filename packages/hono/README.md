@@ -106,6 +106,11 @@ app.post(
 );
 ```
 
+`onVerificationFailure` runs when launch verification returns a structured
+`LtiLaunchVerificationError` (before session creation). Use it to map verification
+codes to app-specific HTTP responses. `onError` handles later failures such as
+invalid form input, unsupported launch messages, and render errors.
+
 The render callbacks receive the Hono context, verified launch, stored session, resolved
 launch message, and session-bound Advantage client.
 
