@@ -1,7 +1,7 @@
 # lti-tool core
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/core"><img alt="npm" src="https://img.shields.io/npm/dm/%40lti-tool%2Fcore?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool"><img alt="npm" src="https://img.shields.io/npm/dm/%40lti-tool%2Fcore?style=flat-square" /></a>
   <a href="https://github.com/lti-tool/lti-tool/actions/workflows/release.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/lti-tool/lti-tool/ci.yml?style=flat-square&branch=dev" /></a>
 </p>
 <p align="center">Modern LTI 1.3 toolkit, built for TypeScript.</p>
@@ -12,81 +12,59 @@
 - **Security** - JWT verification, nonce validation, replay attack prevention
 - **Assignment and Grade Services (AGS)** - Score submission to LMS
 - **Session Management** - Secure session creation and retrieval
-- **Client Management** - Platform and deployment configuration
+- **Platform registration** - One-call launch registration via `upsertLaunchRegistration`
+- **Small app ports** - `LtiToolPort`, `LtiAdvantagePort`, and service-specific client interfaces for app modules and tests
 
 ## Installation
 
 ```bash
-npm install @lti-tool/core
+npm install @longsightgroup/lti-tool
 ```
 
 ## Quick Start
 
 ```typescript
-import { LTITool } from '@lti-tool/core';
+import { LTITool, upsertLaunchRegistration } from '@longsightgroup/lti-tool';
+import { MemoryStorage } from '@longsightgroup/lti-tool/storage/memory';
 
+const storage = new MemoryStorage();
 const ltiTool = new LTITool({
   stateSecret: new TextEncoder().encode('your-secret-key'),
   keyPair, // Your RSA keypair
-  storage: new MemoryStorage(),
+  storage,
 });
 
-// Configure your LMS
-const clientId = await ltiTool.addClient({
-  /* ... */
-});
-await ltiTool.addDeployment(clientId, {
-  /* ... */
+await upsertLaunchRegistration(storage, {
+  name: 'Moodle Sandbox',
+  iss: 'https://sandbox.moodledemo.net',
+  clientId: 'your-client-id',
+  deploymentId: 'your-deployment-id',
+  authUrl: 'https://sandbox.moodledemo.net/mod/lti/auth.php',
+  tokenUrl: 'https://sandbox.moodledemo.net/mod/lti/token.php',
+  jwksUrl: 'https://sandbox.moodledemo.net/mod/lti/certs.php',
 });
 
-// Handle LTI flow
 const authUrl = await ltiTool.handleLogin(loginParams);
-const payload = await ltiTool.verifyLaunch(idToken, state);
-const session = await ltiTool.createSession(payload);
-```
 
-When creating a session from a payload not returned directly by `verifyLaunch` on
-the same `LTITool` instance, pass the verified client ID as the second argument
-if the launch ID token contains multiple audiences.
-
-For structured verification flows, create the session from the verified launch so
-the verified client ID is carried forward automatically:
-
-```typescript
-const result = await ltiTool.verifyLaunchDetailed(idToken, state);
-
+const result = await ltiTool.verifyLaunch(idToken, state);
 if (result.success) {
   const session = await ltiTool.createSessionFromVerifiedLaunch(result.launch);
-} else if (result.error.code === 'launch_config_missing_jwks_endpoint') {
-  // Known client needs administrator setup before signed launches can work.
-} else if (result.error.code === 'launch_client_not_found') {
-  // Unknown issuer/client pair. Treat as an untrusted launch attempt.
 }
 ```
 
-Applications can also authorize a protocol-verified launch against their own
-registry and attach typed metadata for downstream handling:
+Use `upsertLaunchRegistration` whenever an LMS administrator gives you issuer, client ID, deployment ID, and OIDC endpoints. For self-service registration, use `LtiDynamicRegistration`. Custom admin UIs that manage stored client or deployment records directly should call `LTIStorage` methods instead of `LTITool`.
+
+`LTIStorage.validateNonce` atomically claims nonces during launch verification. Configure
+nonce TTL on the storage adapter; core does not pre-store login nonces.
+
+For tests, import builders and fakes from `@longsightgroup/lti-tool/testing`:
 
 ```typescript
-const result = await ltiTool.verifyLaunchDetailed(idToken, state, {
-  authorizeVerifiedLaunch: async (launch) => {
-    const installation = await registry.findInstallation({
-      issuer: launch.issuer,
-      clientId: launch.clientId,
-    });
-
-    return installation === undefined
-      ? { success: false, code: 'installation_not_authorized' }
-      : { success: true, data: installation };
-  },
-});
-
-if (result.success) {
-  const { authorization } = result.launch;
-  const session = await ltiTool.createSessionFromVerifiedLaunch(result.launch);
-} else if (result.error.code === 'verified_launch_authorization_failed') {
-  // The launch was valid LTI, but this app did not authorize the installation.
-}
+import {
+  createFakeLtiAdvantage,
+  testSession,
+  testVerifiedLaunch,
+} from '@longsightgroup/lti-tool/testing';
 ```
 
 ## Persisted session JSON
@@ -99,7 +77,7 @@ import {
   parsePersistedLtiSession,
   serializeLtiSession,
   type LTIStorage,
-} from '@lti-tool/core';
+} from '@longsightgroup/lti-tool';
 
 class DatabaseStorage implements LTIStorage {
   async getSession(sessionId: string) {
@@ -119,7 +97,6 @@ class DatabaseStorage implements LTIStorage {
 
 ## Documentation
 
-- [API Reference](https://docs.lti-tool.dev) - Complete API documentation
 - [Examples](https://github.com/lti-tool/lti-tool-examples) - (Coming soon) Working examples
 
 ## Security

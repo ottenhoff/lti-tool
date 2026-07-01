@@ -62,13 +62,13 @@ export interface LTIStorage {
   listDeployments(clientId: string): Promise<LTIDeployment[]>;
 
   /**
-   * Retrieves deployment configuration by client ID and deployment ID (admin use).
+   * Retrieves deployment configuration by client ID and LMS-provided deployment ID.
    *
    * @param clientId - Unique client identifier
-   * @param deploymentId - Deployment identifier
+   * @param deploymentId - LMS-provided deployment identifier used in launch requests
    * @returns Deployment configuration if found, undefined otherwise
    */
-  getDeployment(
+  getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined>;
@@ -84,10 +84,10 @@ export interface LTIStorage {
   /**
    * Updates an existing deployment configuration.
    * @param clientId - Client identifier
-   * @param deploymentId - Deployment identifier to update
+   * @param deploymentId - Internal deployment identifier to update
    * @param deployment - Partial deployment object with fields to update
    */
-  updateDeployment(
+  updateDeploymentById(
     clientId: string,
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
@@ -97,9 +97,9 @@ export interface LTIStorage {
    * Removes a deployment from a Client.
    *
    * @param clientId - Client identifier
-   * @param deploymentId - Deployment identifier to remove
+   * @param deploymentId - Internal deployment identifier to remove
    */
-  deleteDeployment(clientId: string, deploymentId: string): Promise<void>;
+  deleteDeploymentById(clientId: string, deploymentId: string): Promise<void>;
 
   // Session management
 
@@ -122,18 +122,14 @@ export interface LTIStorage {
   // Nonce validation (prevent replay attacks)
 
   /**
-   * Stores a nonce with expiration time for replay attack prevention.
+   * Atomically claims a launch nonce during verification to prevent replay attacks.
    *
-   * @param nonce - Unique nonce value (typically a UUID)
-   * @param expiresAt - When this nonce should be considered expired
-   */
-  storeNonce(nonce: string, expiresAt: Date): Promise<void>;
-
-  /**
-   * Validates a nonce and marks it as used to prevent replay attacks.
+   * Storage adapters own nonce TTL policy. The method returns true only when this
+   * verification is the first successful claim for the nonce and the adapter can store
+   * the claim until its configured expiration.
    *
-   * @param nonce - Nonce value to validate
-   * @returns true if nonce is valid and unused, false if already used or expired
+   * @param nonce - Nonce value from the verified launch state and ID token
+   * @returns true if the nonce was claimed for the first time, false if already claimed or expired
    */
   validateNonce(nonce: string): Promise<boolean>;
 

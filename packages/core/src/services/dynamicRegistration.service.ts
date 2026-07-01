@@ -1,15 +1,23 @@
-import type { BaseLogger } from 'pino';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 
 import {
+  LTI_CLAIM_TOOL_CONFIGURATION,
   LTI_AGS_SCOPE_LINEITEM,
   LTI_AGS_SCOPE_RESULT_READONLY,
   LTI_AGS_SCOPE_SCORE,
-  LTI_CLAIM_TOOL_CONFIGURATION,
   LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY,
 } from '../constants.js';
+import { LtiServiceError } from '../errors/ltiServiceError.js';
+import type { LTIClient } from '../interfaces/ltiClient.js';
 import type { DynamicRegistrationConfig } from '../interfaces/ltiConfig.js';
+import type { LTIDeployment } from '../interfaces/ltiDeployment.js';
 import type { LTIDynamicRegistrationSession } from '../interfaces/ltiDynamicRegistrationSession.js';
+import type { LTILaunchConfig } from '../interfaces/ltiLaunchConfig.js';
 import type { LTIStorage } from '../interfaces/ltiStorage.js';
+import {
+  projectDynamicRegistrationLaunchRegistration,
+  upsertLaunchRegistration,
+} from '../launchRegistration.js';
 import type { DynamicRegistrationForm } from '../schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
 import {
   type OpenIDConfiguration,
@@ -29,6 +37,28 @@ import {
   buildDynamicRegistrationMessages,
   transformDynamicRegistrationPayload,
 } from './dynamicRegistrationProfiles.js';
+
+export interface LtiDynamicRegistrationCompletionResult {
+  html: string;
+  client: LTIClient;
+  deployment: LTIDeployment;
+  launchConfig: LTILaunchConfig;
+  createdClient: boolean;
+  createdDeployment: boolean;
+}
+
+const storeDynamicRegistrationResult = (input: {
+  storage: LTIStorage;
+  session: LTIDynamicRegistrationSession;
+  registrationResponse: RegistrationResponse;
+}): Promise<Omit<LtiDynamicRegistrationCompletionResult, 'html'>> =>
+  upsertLaunchRegistration(
+    input.storage,
+    projectDynamicRegistrationLaunchRegistration({
+      session: input.session,
+      registrationResponse: input.registrationResponse,
+    }),
+  );
 
 /**
  * Service for handling LTI 1.3 dynamic registration workflows.
@@ -69,7 +99,8 @@ import {
  * const formHtml = await service.initiateDynamicRegistration(request, '/lti/register');
  *
  * // Complete registration
- * const successHtml = await service.completeDynamicRegistration(formData);
+ * const result = await service.completeDynamicRegistration(formData);
+ * const successHtml = result.html;
  * ```
  *
  * @see https://www.imsglobal.org/spec/lti-dr/v1p0 LTI 1.3 Dynamic Registration specification
@@ -85,7 +116,7 @@ export class DynamicRegistrationService {
   constructor(
     private storage: LTIStorage,
     private dynamicRegistrationConfig: DynamicRegistrationConfig,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
   ) {}
 
   /**
@@ -166,18 +197,23 @@ export class DynamicRegistrationService {
    * Validates session, registers with platform, stores client/deployment data, and returns success page.
    *
    * @param dynamicRegistrationForm - Validated form data containing selected services and session token
-   * @returns HTML success page with registration details and close button
+   * @returns HTML success page plus stored client, deployment, and launch config
    * @throws {Error} When session is invalid, registration fails, or storage operations fail
    */
   async completeDynamicRegistration(
     dynamicRegistrationForm: DynamicRegistrationForm,
-  ): Promise<string> {
+  ): Promise<LtiDynamicRegistrationCompletionResult> {
     // 1. Verify session token
     const session = await this.verifyRegistrationSession(
       dynamicRegistrationForm.sessionToken,
     );
     if (!session) {
-      throw new Error('Invalid or expired session');
+      throw new LtiServiceError({
+        code: 'registration_session_expired',
+        serviceKind: 'dynamic_registration',
+        operation: 'completeDynamicRegistration',
+        message: 'Dynamic registration session is invalid or expired',
+      });
     }
 
     // 1. build payload
@@ -195,32 +231,18 @@ export class DynamicRegistrationService {
     );
 
     // 3. save to storage
-    const clientId = await this.storage.addClient({
-      name: registrationResponse.client_name,
-      clientId: registrationResponse.client_id,
-      iss: session.openIdConfiguration.issuer,
-      jwksUrl: session.openIdConfiguration.jwks_uri,
-      authUrl: session.openIdConfiguration.authorization_endpoint,
-      tokenUrl: session.openIdConfiguration.token_endpoint,
+    const storedRegistration = await storeDynamicRegistrationResult({
+      storage: this.storage,
+      session,
+      registrationResponse,
     });
-
-    const ltiToolConfig = registrationResponse[LTI_CLAIM_TOOL_CONFIGURATION];
-    if (ltiToolConfig.deployment_id) {
-      await this.storage.addDeployment(clientId, {
-        deploymentId: ltiToolConfig.deployment_id,
-        name: 'Default Deployment via dynamic registration provided deployment id',
-      });
-    } else {
-      // platform doesn't use a deployment id (canvas for example) - create default
-      await this.storage.addDeployment(clientId, {
-        deploymentId: 'default',
-        name: 'Default Deployment (Canvas-style)',
-      });
-    }
 
     // 4. return success
     const successHtml = this.getRegistrationSuccessHtml(registrationResponse);
-    return successHtml;
+    return {
+      html: successHtml,
+      ...storedRegistration,
+    };
   }
 
   /**

@@ -1,22 +1,22 @@
-# @lti-tool/postgresql
+# @longsightgroup/lti-tool/storage/postgresql
 
 <p align="center">Production-ready PostgreSQL storage adapter for LTI 1.3. Includes caching and optimized for AWS Lambda.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/postgresql"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fpostgresql" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool/storage/postgresql"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fpostgresql" /></a>
 </p>
 
 ## Installation
 
 ```bash
-npm install @lti-tool/postgresql
+npm install @longsightgroup/lti-tool postgres
 ```
 
 ## Quick Start
 
 ```typescript
-import { PostgresStorage } from '@lti-tool/postgresql';
-import { LTITool } from '@lti-tool/core';
+import { PostgresStorage } from '@longsightgroup/lti-tool/storage/postgresql';
+import { LTITool } from '@longsightgroup/lti-tool';
 
 const storage = new PostgresStorage({
   connectionUrl: process.env.DATABASE_URL!,
@@ -33,31 +33,25 @@ const ltiTool = new LTITool({
 - **Production Ready** - Handles high-scale LTI deployments
 - **Built-in Caching** - LRU cache for frequently accessed data
 - **Type-safe** - Uses Drizzle ORM for database operations
-- **Transaction Support** - Handles data integrity on deletes
+- **Cascade Deletes** - Database constraints remove deployments with their client
 - **Tuned Connection Pool Defaults** - Connection pool defaults based on hosting environment
-
-## API Reference
-
-- [API Reference](https://docs.lti-tool.dev/modules/_lti-tool_postgresql.html) - Complete API documentation
 
 ## Configuration
 
-### Using Drizzle Kit Push (Recommended for Development)
+### Using Migrations
 
 ```bash
 # Set your DATABASE_URL
 export DATABASE_URL="postgresql://user:password@host:port/database"
 
-# Push schema to database
-npx drizzle-kit push
+# Apply the generated migrations
+npx drizzle-kit migrate --config packages/postgresql/drizzle.config.ts
 ```
 
-### Using Migrations (Recommended for Production)
-
-```bash
-# Apply migrations
-npx drizzle-kit migrate
-```
+The Drizzle schema files are the source of truth for contributors. After schema
+changes, run `npm run db:generate:postgresql` and commit the generated migration
+SQL and metadata. Run `npm run db:check:postgresql` before finishing migration
+changes.
 
 ### PostgresStorageConfig
 
@@ -68,88 +62,57 @@ npx drizzle-kit migrate
   - `idleTimeout`: Idle timeout in seconds before connection is closed (default: 20)
 - **nonceExpirationSeconds** (optional): Nonce TTL in seconds (default: 600)
 
-- **logger** (optional): Pino logger for debugging
+- **logger** (optional): Structural logger for debugging
 
 ## Database Schema
 
-The adapter uses these tables:
+All SQL adapters use the same physical naming contract from the
+`#storage/schema-definitions` internal import.
 
-- **clients**: LTI platform clients
-  Unique constraint: `(iss, clientId)`
-- **deployments**: Platform deployments (many-to-one with clients)
-  Unique constraint: `(clientId, deploymentId)`
-- **sessions**: LTI sessions with expiration
-  Indexed: `expiresAt`
-- **nonces**: One-time use nonces
-  Primary key: `nonce`
-  Indexed: `expiresAt`
-- **registration_sessions**: Dynamic registration sessions
-  Indexed: `expiresAt`
+### Tables
 
-All tables use native PostgreSQL UUIDs for primary keys and include indexes for performance.
+- **lti_clients** — LTI platform clients
+- **lti_deployments** — platform deployments (many-to-one with clients)
+- **lti_sessions** — LTI launch sessions with expiration
+- **lti_nonces** — one-time use nonces
+- **lti_registration_sessions** — dynamic registration sessions
 
-### clients
+### lti_clients
 
-| Column     | Type         | Constraints           | Description                    |
-| ---------- | ------------ | --------------------- | ------------------------------ |
-| `id`       | UUID         | PRIMARY KEY, NOT NULL | Internal UUID for the client   |
-| `name`     | VARCHAR(255) | NOT NULL              | Human-readable platform name   |
-| `iss`      | VARCHAR(255) | NOT NULL              | Issuer URL (LMS platform)      |
-| `clientId` | VARCHAR(255) | NOT NULL              | LMS-provided client identifier |
-| `authUrl`  | TEXT         | NOT NULL              | OAuth2 authorization endpoint  |
-| `tokenUrl` | TEXT         | NOT NULL              | OAuth2 token endpoint          |
-| `jwksUrl`  | TEXT         | NOT NULL              | JWKS endpoint for public keys  |
+| Physical column | Type         | Description                    |
+| --------------- | ------------ | ------------------------------ |
+| `id`            | VARCHAR(36)  | Internal UUID for the client   |
+| `platform_name` | VARCHAR(255) | Human-readable platform name   |
+| `iss`           | VARCHAR(255) | Issuer URL (LMS platform)      |
+| `client_id`     | VARCHAR(255) | LMS-provided client identifier |
+| `auth_url`      | TEXT         | OAuth2 authorization endpoint  |
+| `token_url`     | TEXT         | OAuth2 token endpoint          |
+| `jwks_url`      | TEXT         | JWKS endpoint for public keys  |
 
-**Indexes:**
+### lti_deployments
 
-- `issuer_client_idx`: `(clientId, iss)` - For fast client lookups
-- `iss_client_id_unique`: `(iss, clientId)` - Unique constraint preventing duplicate clients
+| Physical column          | Type         | Description                        |
+| ------------------------ | ------------ | ---------------------------------- |
+| `id`                     | VARCHAR(36)  | Internal UUID for the deployment   |
+| `deployment_id`          | VARCHAR(255) | LMS-provided deployment identifier |
+| `deployment_name`        | VARCHAR(255) | Optional human-readable name       |
+| `deployment_description` | TEXT         | Optional description               |
+| `client_id`              | VARCHAR(36)  | References `lti_clients.id`        |
 
-### deployments
+### lti_sessions / lti_registration_sessions
 
-| Column         | Type         | Constraints           | Description                        |
-| -------------- | ------------ | --------------------- | ---------------------------------- |
-| `id`           | UUID         | PRIMARY KEY, NOT NULL | Internal UUID for the deployment   |
-| `deploymentId` | VARCHAR(255) | NOT NULL              | LMS-provided deployment identifier |
-| `name`         | VARCHAR(255) | NULL                  | Optional human-readable name       |
-| `description`  | TEXT         | NULL                  | Optional description               |
-| `clientId`     | UUID         | NOT NULL, FOREIGN KEY | References `clients.id`            |
+| Physical column | Type   | Description                   |
+| --------------- | ------ | ----------------------------- |
+| `id`            | UUID   | Session UUID                  |
+| `payload`       | JSONB  | Serialized session data       |
+| `expires_at`    | BIGINT | Expiration epoch milliseconds |
 
-**Indexes:**
+### lti_nonces
 
-- `deployment_id_idx`: `(deploymentId)` - For fast deployment lookups
-- `client_deployment_unique`: `(clientId, deploymentId)` - Unique constraint per client
-
-### sessions
-
-| Column      | Type                     | Constraints           | Description                  |
-| ----------- | ------------------------ | --------------------- | ---------------------------- |
-| `id`        | UUID                     | PRIMARY KEY, NOT NULL | Session UUID                 |
-| `data`      | JSONB                    | NOT NULL              | Complete LTI session data    |
-| `expiresAt` | TIMESTAMP WITH TIME ZONE | NOT NULL              | Session expiration timestamp |
-
-**Indexes:**
-
-- `sessions_expires_at_idx`: `(expiresAt)` - For cleanup queries and expiration checks
-
-### nonces
-
-| Column      | Type                     | Constraints           | Description                |
-| ----------- | ------------------------ | --------------------- | -------------------------- |
-| `nonce`     | VARCHAR(255)             | PRIMARY KEY, NOT NULL | One-time use nonce value   |
-| `expiresAt` | TIMESTAMP WITH TIME ZONE | NOT NULL              | Nonce expiration timestamp |
-
-### registration_sessions
-
-| Column      | Type                     | Constraints           | Description                       |
-| ----------- | ------------------------ | --------------------- | --------------------------------- |
-| `id`        | UUID                     | PRIMARY KEY, NOT NULL | Registration session UUID         |
-| `data`      | JSONB                    | NOT NULL              | Dynamic registration session data |
-| `expiresAt` | TIMESTAMP WITH TIME ZONE | NOT NULL              | Session expiration timestamp      |
-
-**Indexes:**
-
-- `reg_sessions_expires_at_idx`: `(expiresAt)` - For cleanup queries and expiration checks
+| Physical column | Type         | Description                         |
+| --------------- | ------------ | ----------------------------------- |
+| `nonce`         | VARCHAR(255) | One-time use nonce value            |
+| `expires_at`    | BIGINT       | Nonce expiration epoch milliseconds |
 
 ## Connection Pool Behavior
 
@@ -183,7 +146,7 @@ const storage = new PostgresStorage({
 ### Long-Running Servers
 
 ```typescript
-import { PostgresStorage } from '@lti-tool/postgresql';
+import { PostgresStorage } from '@longsightgroup/lti-tool/storage/postgresql';
 
 export const storage = new PostgresStorage({
   connectionUrl: process.env.DATABASE_URL!,
@@ -209,7 +172,7 @@ process.on('SIGINT', shutdown);
 ### AWS Lambda / Serverless
 
 ```typescript
-import { PostgresStorage } from '@lti-tool/postgresql';
+import { PostgresStorage } from '@longsightgroup/lti-tool/storage/postgresql';
 
 let storage: PostgresStorage | undefined;
 
@@ -272,8 +235,8 @@ podman run -d \
 ### Run Tests
 
 ```bash
-DATABASE_URL="postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test" npx drizzle-kit migrate
-DATABASE_URL="postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test" npm test
+DATABASE_URL="postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test" npm run db:migrate:postgresql
+DATABASE_URL="postgresql://lti_user:lti_password@127.0.0.1:5432/lti_test" npm run test:integration:postgresql
 ```
 
 **Important:** Always close the pool after tests:

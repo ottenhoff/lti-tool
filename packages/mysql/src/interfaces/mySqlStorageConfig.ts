@@ -1,12 +1,17 @@
-import type { Logger } from 'pino';
+import type mysql from 'mysql2/promise';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 export interface MySqlStorageConfig {
-  logger?: Logger;
+  logger?: LtiLogger;
   /**
    * MySQL connection URL in format: mysql://user:password@host:port/database
    * Compatible with DATABASE_URL environment variable used by most ORMs
    */
   connectionUrl: string;
+  /**
+   * Optional pre-created mysql2 pool (used by integration test harnesses).
+   */
+  pool?: mysql.Pool;
   /**
    * Optional mysql2 pool configuration
    */

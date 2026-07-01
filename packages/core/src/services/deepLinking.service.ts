@@ -1,5 +1,5 @@
 import { SignJWT } from 'jose';
-import type { BaseLogger } from 'pino';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 
 import {
   LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS,
@@ -30,7 +30,7 @@ export class DeepLinkingService {
    */
   constructor(
     private keyPair: CryptoKeyPair,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
     private keyId = 'main',
   ) {}
 

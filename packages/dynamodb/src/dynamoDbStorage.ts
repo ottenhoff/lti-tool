@@ -11,22 +11,23 @@ import {
   QueryCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import type {
-  LTIClient,
-  LTIDeployment,
-  LTIDynamicRegistrationSession,
-  LTILaunchConfig,
-  LTISession,
-  LTIStorage,
-} from '@lti-tool/core';
-import type { Logger } from 'pino';
+import {
+  createNoopLogger,
+  parsePersistedLtiDynamicRegistrationSessionValue,
+  parsePersistedLtiSessionValue,
+  type LTIClient,
+  type LTIDeployment,
+  type LTIDynamicRegistrationSession,
+  type LTILaunchConfig,
+  type LTISession,
+  type LTIStorage,
+} from '@longsightgroup/lti-tool';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 import {
   LAUNCH_CONFIG_CACHE,
-  SESSION_CACHE,
   SESSION_TTL,
   undefinedLaunchConfigValue,
-  undefinedSessionValue,
 } from './cacheConfig.js';
 import type { DynamoBase } from './interfaces/dynamoBase.js';
 import type { DynamoDbStorageConfig } from './interfaces/dynamoDbStorageConfig.js';
@@ -36,11 +37,11 @@ import type { DynamoLTIDeployment } from './interfaces/dynamoLTIDeployment.js';
 /**
  * DynamoDB implementation of LTI storage interface.
  *
- * Stores platforms, sessions, and nonces in DynamoDB with LRU caching.
+ * Stores platforms, sessions, and nonces in DynamoDB.
  * Uses single-table design with different prefixes for different entity types.
  */
 export class DynamoDbStorage implements LTIStorage {
-  private logger: Logger;
+  private logger: LtiLogger;
   private controlPlaneTable: string;
   private dataPlaneTable: string;
   private launchConfigTable: string;
@@ -53,14 +54,7 @@ export class DynamoDbStorage implements LTIStorage {
    * @param config - Configuration including table names and optional logger
    */
   constructor(config: DynamoDbStorageConfig) {
-    this.logger =
-      config?.logger ??
-      ({
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      } as unknown as Logger);
+    this.logger = config?.logger ?? createNoopLogger();
     this.controlPlaneTable = config.controlPlaneTable;
     this.dataPlaneTable = config.dataPlaneTable;
     this.launchConfigTable = config.launchConfigTable;
@@ -92,7 +86,7 @@ export class DynamoDbStorage implements LTIStorage {
       if (result.Items?.length) {
         for (const item of result.Items) {
           const clientRecord = unmarshall(item) as DynamoLTIClient;
-          clients.push(clientRecord);
+          clients.push(this.cleanClientRecord(clientRecord));
         }
       }
 
@@ -134,13 +128,10 @@ export class DynamoDbStorage implements LTIStorage {
     return client;
   }
 
-  async addClient(client: Omit<LTIClient, 'id'>): Promise<string> {
+  async addClient(client: Omit<LTIClient, 'id' | 'deployments'>): Promise<string> {
     const clientId = crypto.randomUUID();
     const pk = this.createClientPK(clientId);
     this.logger.info({ client, clientId }, 'adding client');
-
-    // Filter out deployments from client data
-    const { deployments: _clientDeployments, ...clientWithoutDeployments } = client;
 
     const clientData: Omit<DynamoLTIClient, 'deployments'> = {
       pk,
@@ -149,7 +140,7 @@ export class DynamoDbStorage implements LTIStorage {
       gsi1sk: `#${clientId}`,
       type: 'Client',
       id: clientId,
-      ...clientWithoutDeployments,
+      ...client,
     };
     const result = await this.ddbClient.send(
       new PutItemCommand({
@@ -165,7 +156,7 @@ export class DynamoDbStorage implements LTIStorage {
 
   async updateClient(
     clientId: string,
-    client: Partial<Omit<LTIClient, 'id'>>,
+    client: Partial<Omit<LTIClient, 'id' | 'deployments'>>,
   ): Promise<void> {
     this.logger.info({ clientId, client }, 'updating client');
 
@@ -181,8 +172,7 @@ export class DynamoDbStorage implements LTIStorage {
       await this.deleteAllClientLaunchConfigs(existing.iss, existing.clientId);
     }
 
-    // Filter out deployments from client data
-    const { deployments: _clientDeployments, ...clientWithoutDeployments } = client;
+    const { deployments: _deployments, ...existingClientData } = existing;
 
     // 1. Update the control plane table
     const pk = this.createClientPK(clientId);
@@ -192,8 +182,8 @@ export class DynamoDbStorage implements LTIStorage {
       gsi1pk: 'Type#Client',
       gsi1sk: `#${clientId}`,
       type: 'Client',
-      ...existing,
-      ...clientWithoutDeployments, // Override with updates
+      ...existingClientData,
+      ...client, // Override with updates
       id: clientId,
     };
     const result = await this.ddbClient.send(
@@ -220,7 +210,7 @@ export class DynamoDbStorage implements LTIStorage {
     }
 
     // 1. delete all launch configs
-    this.deleteAllClientLaunchConfigs(existing.iss, existing.clientId);
+    await this.deleteAllClientLaunchConfigs(existing.iss, existing.clientId);
 
     // 2. query to get all items for this client
     const pk = this.createClientPK(clientId);
@@ -281,21 +271,49 @@ export class DynamoDbStorage implements LTIStorage {
       return [];
     }
 
-    result.Items.map((item) => unmarshall(item) as DynamoLTIDeployment);
-
-    const deployments: LTIDeployment[] = result.Items.map(
-      (item) => unmarshall(item) as DynamoLTIDeployment,
+    const deployments = result.Items.map((item) =>
+      this.cleanDeploymentRecord(unmarshall(item) as DynamoLTIDeployment),
     );
 
     this.logger.debug({ clientId, count: deployments.length }, 'deployments found');
     return deployments;
   }
 
-  async getDeployment(
+  async getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined> {
-    this.logger.debug({ clientId, deploymentId }, 'getting deployment by id');
+    this.logger.debug({ clientId, deploymentId }, 'getting deployment by platform id');
+
+    const result = await this.ddbClient.send(
+      new QueryCommand({
+        TableName: this.controlPlaneTable,
+        IndexName: 'GSI2',
+        KeyConditionExpression: 'gsi2pk = :gsi2pk AND gsi2sk = :gsi2sk',
+        ExpressionAttributeValues: marshall({
+          ':gsi2pk': this.createClientPK(clientId),
+          ':gsi2sk': this.createPlatformDeploymentSK(deploymentId),
+        }),
+        Limit: 1,
+        ReturnConsumedCapacity: 'TOTAL',
+      }),
+    );
+    this.logDynamoDbResult(result, 'get deployment by platform id');
+
+    const [deployment] = result.Items ?? [];
+    if (deployment === undefined) {
+      this.logger.warn({ clientId, deploymentId }, 'deployment not found');
+      return undefined;
+    }
+
+    return this.cleanDeploymentRecord(unmarshall(deployment) as DynamoLTIDeployment);
+  }
+
+  private async getDeploymentByInternalId(
+    clientId: string,
+    deploymentId: string,
+  ): Promise<LTIDeployment | undefined> {
+    this.logger.debug({ clientId, deploymentId }, 'getting deployment by internal id');
 
     const pk = this.createClientPK(clientId);
     const result = await this.ddbClient.send(
@@ -315,7 +333,7 @@ export class DynamoDbStorage implements LTIStorage {
       return undefined;
     }
 
-    return unmarshall(result.Item) as LTIDeployment;
+    return this.cleanDeploymentRecord(unmarshall(result.Item) as DynamoLTIDeployment);
   }
 
   async addDeployment(
@@ -323,12 +341,18 @@ export class DynamoDbStorage implements LTIStorage {
     deployment: Omit<LTIDeployment, 'id'>,
   ): Promise<string> {
     this.logger.info({ clientId, deployment }, 'adding deployment');
+    if ((await this.getClientById(clientId)) === undefined) {
+      throw new Error('Client not found');
+    }
+
     const deploymentInternalId = crypto.randomUUID(); // generate stable id
 
     const pk = this.createClientPK(clientId);
     const deploymentData: DynamoLTIDeployment = {
       pk, // "C#uuid-goes-here"
       sk: this.createDeploymentSK(deploymentInternalId),
+      gsi2pk: pk,
+      gsi2sk: this.createPlatformDeploymentSK(deployment.deploymentId),
       type: 'Deployment',
       id: deploymentInternalId,
       ...deployment,
@@ -350,7 +374,7 @@ export class DynamoDbStorage implements LTIStorage {
     return deploymentInternalId;
   }
 
-  async updateDeployment(
+  async updateDeploymentById(
     clientId: string,
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
@@ -358,28 +382,26 @@ export class DynamoDbStorage implements LTIStorage {
     this.logger.info({ clientId, deploymentId, deployment }, 'updating deployment');
 
     // Get existing deployment to validate it exists
-    const existing = await this.getDeployment(clientId, deploymentId);
+    const existing = await this.getDeploymentByInternalId(clientId, deploymentId);
     if (!existing) throw new Error('Deployment not found');
 
-    // check if LMS deployment id changed (affects launch config SK)
-    const lmsDeploymentIdChanged =
-      deployment.deploymentId && deployment.deploymentId !== existing.deploymentId;
-
-    if (lmsDeploymentIdChanged) {
-      const client = await this.getClientById(clientId);
-      if (client) {
-        await this.deleteLaunchConfig(client.iss, client.clientId, existing.deploymentId);
-      }
-    }
+    await this.deleteLaunchConfigWhenPlatformDeploymentIdChanges(
+      clientId,
+      existing,
+      deployment,
+    );
 
     // Update deployment data
     const pk = this.createClientPK(clientId);
+    const updatedDeploymentId = deployment.deploymentId ?? existing.deploymentId;
     const updatedData = {
       pk, // "C#uuid-goes-here"
       sk: this.createDeploymentSK(deploymentId),
       type: 'Deployment',
       ...existing,
       ...deployment, // Override with updates
+      gsi2pk: pk,
+      gsi2sk: this.createPlatformDeploymentSK(updatedDeploymentId),
     };
     const result = await this.ddbClient.send(
       new PutItemCommand({
@@ -395,20 +417,17 @@ export class DynamoDbStorage implements LTIStorage {
     await this.saveLaunchConfig(launchConfig);
   }
 
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
+  async deleteDeploymentById(clientId: string, deploymentId: string): Promise<void> {
     this.logger.info({ clientId, deploymentId }, 'deleting deployment');
 
     // get deployment and client data for launch config deletion
-    const existing = await this.getDeployment(clientId, deploymentId);
+    const existing = await this.getDeploymentByInternalId(clientId, deploymentId);
     if (!existing) {
       this.logger.warn({ clientId, deploymentId }, 'deployment not found for deletion');
       return;
     }
 
-    const client = await this.getClientById(clientId);
-    if (client) {
-      await this.deleteLaunchConfig(client.iss, client.clientId, existing.deploymentId);
-    }
+    await this.deleteLaunchConfigForDeployment(clientId, existing);
 
     const pk = this.createClientPK(clientId);
     const result = await this.ddbClient.send(
@@ -424,12 +443,6 @@ export class DynamoDbStorage implements LTIStorage {
     this.logDynamoDbResult(result, 'delete deployment');
 
     this.logger.debug({ clientId, deploymentId }, 'deployment deleted');
-  }
-
-  // oxlint-disable-next-line no-unused-vars require-await
-  async storeNonce(nonce: string, expiresAt: Date): Promise<void> {
-    // Noop - the real work happens in validateNonce with conditional put
-    this.logger.trace({ nonce, expiresAt }, 'nonce will be validated on use');
   }
 
   async validateNonce(nonce: string): Promise<boolean> {
@@ -466,15 +479,7 @@ export class DynamoDbStorage implements LTIStorage {
 
   async getSession(sessionId: string): Promise<LTISession | undefined> {
     this.logger.debug({ sessionId }, 'getting session');
-    // Check cache first
-    const cachedSession = SESSION_CACHE.get(sessionId);
-    if (cachedSession === undefinedSessionValue) {
-      return undefined;
-    }
-    if (cachedSession) {
-      this.logger.debug({ sessionId }, 'session found in cache');
-      return cachedSession;
-    }
+
     const result = await this.ddbClient.send(
       new GetItemCommand({
         TableName: this.dataPlaneTable,
@@ -489,13 +494,10 @@ export class DynamoDbStorage implements LTIStorage {
 
     if (!result.Item) {
       this.logger.warn({ sessionId }, 'session not found');
-      SESSION_CACHE.set(sessionId, undefinedSessionValue);
       return undefined;
     }
 
-    const session = unmarshall(result.Item) as LTISession;
-    SESSION_CACHE.set(sessionId, session);
-    return session;
+    return this.cleanSessionRecord(unmarshall(result.Item));
   }
 
   async addSession(session: LTISession): Promise<string> {
@@ -519,8 +521,6 @@ export class DynamoDbStorage implements LTIStorage {
     );
     this.logDynamoDbResult(result, 'add session');
 
-    // Cache the session
-    SESSION_CACHE.set(session.id, session);
     this.logger.debug({ sessionId: session.id }, 'session added');
     return session.id;
   }
@@ -557,22 +557,7 @@ export class DynamoDbStorage implements LTIStorage {
     );
     this.logDynamoDbResult(result, 'get launch config');
 
-    // if not found, try the default deployment (from dynamic registration)
-    if (!result.Item && deploymentId !== 'default') {
-      this.logger.debug({ deploymentId }, 'trying default deployment fallback');
-      result = await this.ddbClient.send(
-        new GetItemCommand({
-          TableName: this.launchConfigTable,
-          Key: marshall({
-            pk: `${iss}#${clientId}`,
-            sk: 'default',
-          }),
-          ReturnConsumedCapacity: 'TOTAL',
-        }),
-      );
-      this.logDynamoDbResult(result, 'get default launch config');
-    }
-
+    // Exact deployment match only; core launch resolution owns default-deployment fallback.
     if (!result.Item) {
       this.logger.warn({ iss, clientId, deploymentId }, 'launch config not found');
       LAUNCH_CONFIG_CACHE.set(cacheKey, undefinedLaunchConfigValue);
@@ -655,7 +640,8 @@ export class DynamoDbStorage implements LTIStorage {
       return undefined;
     }
 
-    const session = unmarshall(result.Item) as LTIDynamicRegistrationSession;
+    const session = this.cleanRegistrationSessionRecord(unmarshall(result.Item));
+    if (!session) return undefined;
 
     // Check if expired (additional safety check beyond DynamoDB TTL)
     if (session.expiresAt < Date.now()) {
@@ -703,6 +689,35 @@ export class DynamoDbStorage implements LTIStorage {
     // Clear from cache
     const cacheKey = `${issuer}#${clientId}#${deploymentId}`;
     LAUNCH_CONFIG_CACHE.delete(cacheKey);
+  }
+
+  private async deleteLaunchConfigForDeployment(
+    clientId: string,
+    deployment: LTIDeployment,
+  ): Promise<void> {
+    const client = await this.getClientById(clientId);
+    if (!client) {
+      this.logger.warn({ clientId }, 'client not found for launch config deletion');
+      return;
+    }
+
+    await this.deleteLaunchConfig(client.iss, client.clientId, deployment.deploymentId);
+  }
+
+  private async deleteLaunchConfigWhenPlatformDeploymentIdChanges(
+    clientId: string,
+    existingDeployment: LTIDeployment,
+    deploymentUpdate: Partial<LTIDeployment>,
+  ): Promise<void> {
+    const platformDeploymentId = deploymentUpdate.deploymentId;
+    if (
+      platformDeploymentId === undefined ||
+      platformDeploymentId === existingDeployment.deploymentId
+    ) {
+      return;
+    }
+
+    await this.deleteLaunchConfigForDeployment(clientId, existingDeployment);
   }
 
   private async deleteAllClientLaunchConfigs(
@@ -774,6 +789,10 @@ export class DynamoDbStorage implements LTIStorage {
     return `D#${deploymentId}`;
   }
 
+  private createPlatformDeploymentSK(deploymentId: string): string {
+    return `PD#${deploymentId}`;
+  }
+
   private createSessionKey(sessionId: string): string {
     return `S#${sessionId}`;
   }
@@ -809,16 +828,16 @@ export class DynamoDbStorage implements LTIStorage {
       const unmarshalled = unmarshall(item) as DynamoBase;
       switch (unmarshalled.type) {
         case 'Client': {
-          // oxlint-disable-next-line no-unused-vars
-          const { pk, sk, type, ...cleanClient } = unmarshalled as DynamoLTIClient;
-          clientRecord = cleanClient as LTIClient;
+          clientRecord = {
+            ...this.cleanClientRecord(unmarshalled as DynamoLTIClient),
+            deployments: [],
+          };
           break;
         }
         case 'Deployment': {
-          // oxlint-disable-next-line no-unused-vars
-          const { pk, sk, type, ...cleanDeployment } =
-            unmarshalled as DynamoLTIDeployment;
-          deploymentRecords.push(cleanDeployment as LTIDeployment);
+          deploymentRecords.push(
+            this.cleanDeploymentRecord(unmarshalled as DynamoLTIDeployment),
+          );
           break;
         }
       }
@@ -830,6 +849,43 @@ export class DynamoDbStorage implements LTIStorage {
     }
 
     return { ...clientRecord, deployments: deploymentRecords };
+  }
+
+  private cleanDeploymentRecord(deployment: DynamoLTIDeployment): LTIDeployment {
+    const {
+      pk: _pk,
+      sk: _sk,
+      gsi2pk: _gsi2pk,
+      gsi2sk: _gsi2sk,
+      type: _type,
+      ...cleanDeployment
+    } = deployment;
+    return cleanDeployment;
+  }
+
+  private cleanClientRecord(client: DynamoLTIClient): Omit<LTIClient, 'deployments'> {
+    const { id, name, iss, clientId, authUrl, tokenUrl, jwksUrl } = client;
+    return { id, name, iss, clientId, authUrl, tokenUrl, jwksUrl };
+  }
+
+  private cleanSessionRecord(record: Record<string, unknown>): LTISession | undefined {
+    const parsed = parsePersistedLtiSessionValue(stripDynamoDataPlaneKeys(record));
+    if (!parsed) {
+      this.logger.warn('invalid persisted session data');
+    }
+    return parsed;
+  }
+
+  private cleanRegistrationSessionRecord(
+    record: Record<string, unknown>,
+  ): LTIDynamicRegistrationSession | undefined {
+    const parsed = parsePersistedLtiDynamicRegistrationSessionValue(
+      stripDynamoDataPlaneKeys(record),
+    );
+    if (!parsed) {
+      this.logger.warn('invalid persisted registration session data');
+    }
+    return parsed;
   }
 
   private async buildLtiLaunchConfig(
@@ -854,4 +910,11 @@ export class DynamoDbStorage implements LTIStorage {
       tokenUrl: client.tokenUrl,
     };
   }
+}
+
+function stripDynamoDataPlaneKeys<T extends Record<string, unknown>>(
+  record: T,
+): Omit<T, 'pk' | 'sk' | 'ttl'> {
+  const { pk: _pk, sk: _sk, ttl: _ttl, ...rest } = record;
+  return rest;
 }

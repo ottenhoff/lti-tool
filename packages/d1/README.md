@@ -1,11 +1,11 @@
-# @lti-tool/d1
+# @longsightgroup/lti-tool/storage/d1
 
-Cloudflare D1 storage adapter for `@lti-tool/core`.
+Cloudflare D1 storage adapter for `@longsightgroup/lti-tool`.
 
 ## Installation
 
 ```bash
-npm install @lti-tool/d1
+npm install @longsightgroup/lti-tool drizzle-orm
 ```
 
 ## Usage
@@ -13,9 +13,13 @@ npm install @lti-tool/d1
 Apply the Drizzle migrations in `drizzle/` to your D1 database, then pass the
 binding to `D1Storage`.
 
+The Drizzle schema files are the source of truth for contributors. After schema
+changes, run `npm run db:generate:d1` and commit the generated migration SQL and
+metadata. Run `npm run db:check:d1` before finishing migration changes.
+
 ```typescript
-import { LTITool } from '@lti-tool/core';
-import { D1Storage } from '@lti-tool/d1';
+import { LTITool } from '@longsightgroup/lti-tool';
+import { D1Storage } from '@longsightgroup/lti-tool/storage/d1';
 
 const storage = new D1Storage({
   database: env.DB,
@@ -29,13 +33,12 @@ const ltiTool = new LTITool({
 
 ## Schema
 
-This adapter creates prefixed tables:
+All SQL adapters share the same physical naming contract defined by the
+`#storage/schema-definitions` internal import:
 
-- `lti_tool_clients`
-- `lti_tool_deployments`
-- `lti_tool_sessions`
-- `lti_tool_nonces`
-- `lti_tool_registration_sessions`
+- Tables: `lti_clients`, `lti_deployments`, `lti_sessions`, `lti_nonces`, `lti_registration_sessions`
+- Columns: snake_case physical names (`platform_name`, `client_id`, `payload`, …)
+- Reserved-word-safe identifiers validated in CI
 
-The prefix keeps LTI storage separate from application tables in a shared D1
+The `lti_` prefix keeps LTI storage separate from application tables in a shared D1
 database.

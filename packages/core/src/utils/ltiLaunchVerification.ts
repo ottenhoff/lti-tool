@@ -2,8 +2,6 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 
 import { LTI_CLAIM_DEPLOYMENT_ID, LTI_CLAIM_TARGET_LINK_URI } from '../constants.js';
 import type { LTILaunchConfig } from '../interfaces/index.js';
-import type { LTIClient } from '../interfaces/ltiClient.js';
-import type { LTIDeployment } from '../interfaces/ltiDeployment.js';
 import type { LTIStorage } from '../interfaces/ltiStorage.js';
 import {
   HandleLoginParamsSchema,
@@ -13,6 +11,7 @@ import {
 } from '../schemas/index.js';
 
 import { formatError } from './errorFormatting.js';
+import { resolveLaunchConfig } from './launchConfigValidation.js';
 
 type RemoteJwks = ReturnType<typeof createRemoteJWKSet>;
 export type LtiLaunchJwksCache = Map<string, RemoteJwks>;
@@ -86,7 +85,7 @@ export type LtiVerifiedLaunchAuthorizationResult<TAuthorization> =
       cause?: unknown;
     };
 
-export interface LtiVerifyLaunchDetailedOptions<TAuthorization> {
+export interface LtiVerifyLaunchOptions<TAuthorization> {
   authorizeVerifiedLaunch?: (
     launch: LtiVerifiedLaunch,
   ) =>
@@ -304,12 +303,6 @@ async function readLaunchConfig(
   clientId: string,
   deploymentId: string,
 ): Promise<LTILaunchConfig> {
-  validateLaunchClient(
-    await readLaunchClient(storage, issuer, clientId),
-    issuer,
-    clientId,
-  );
-  await readLaunchDeployment(storage, issuer, clientId, deploymentId);
   const launchConfig = await readStoredLaunchConfig(
     storage,
     issuer,
@@ -329,7 +322,7 @@ async function readStoredLaunchConfig(
 ): Promise<LTILaunchConfig> {
   let launchConfig: LTILaunchConfig | undefined;
   try {
-    launchConfig = await storage.getLaunchConfig(issuer, clientId, deploymentId);
+    launchConfig = await resolveLaunchConfig(storage, issuer, clientId, deploymentId);
   } catch (error) {
     throw new LtiLaunchVerificationError(
       'launch_config_lookup_failed',
@@ -340,7 +333,7 @@ async function readStoredLaunchConfig(
 
   if (!launchConfig) {
     throw new LtiLaunchVerificationError(
-      'launch_config_invalid',
+      'launch_config_not_found',
       `Launch config is missing for issuer '${issuer}', client '${clientId}', deployment '${deploymentId}'`,
     );
   }
@@ -377,79 +370,6 @@ function validateLaunchConfig(
     throw new LtiLaunchVerificationError(
       'launch_config_missing_token_endpoint',
       `Launch config for client '${clientId}' is missing a token endpoint`,
-    );
-  }
-}
-
-async function readLaunchClient(
-  storage: LTIStorage,
-  issuer: string,
-  clientId: string,
-): Promise<LTIClient | undefined> {
-  try {
-    return await storage.getClientById(clientId);
-  } catch (error) {
-    throw new LtiLaunchVerificationError(
-      'launch_config_lookup_failed',
-      `Launch client lookup failed for issuer '${issuer}', client '${clientId}'`,
-      error,
-    );
-  }
-}
-
-function validateLaunchClient(
-  client: LTIClient | undefined,
-  issuer: string,
-  clientId: string,
-): void {
-  if (!client || client.iss !== issuer) {
-    throw new LtiLaunchVerificationError(
-      'launch_client_not_found',
-      `Launch client not found for issuer '${issuer}', client '${clientId}'`,
-    );
-  }
-
-  if (!client.jwksUrl) {
-    throw new LtiLaunchVerificationError(
-      'launch_config_missing_jwks_endpoint',
-      `Launch client '${clientId}' is missing a JWKS endpoint`,
-    );
-  }
-
-  if (!client.tokenUrl) {
-    throw new LtiLaunchVerificationError(
-      'launch_config_missing_token_endpoint',
-      `Launch client '${clientId}' is missing a token endpoint`,
-    );
-  }
-}
-
-async function readLaunchDeployment(
-  storage: LTIStorage,
-  issuer: string,
-  clientId: string,
-  deploymentId: string,
-): Promise<LTIDeployment> {
-  try {
-    const deployment = await storage.getDeployment(clientId, deploymentId);
-
-    if (!deployment) {
-      throw new LtiLaunchVerificationError(
-        'launch_deployment_not_found',
-        `Launch deployment not found for issuer '${issuer}', client '${clientId}', deployment '${deploymentId}'`,
-      );
-    }
-
-    return deployment;
-  } catch (error) {
-    if (error instanceof LtiLaunchVerificationError) {
-      throw error;
-    }
-
-    throw new LtiLaunchVerificationError(
-      'launch_config_lookup_failed',
-      `Launch deployment lookup failed for issuer '${issuer}', client '${clientId}', deployment '${deploymentId}'`,
-      error,
     );
   }
 }

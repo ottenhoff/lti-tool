@@ -2,6 +2,7 @@ import { SignJWT } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LTI_AGS_SCOPE_SCORE } from '../src/constants.js';
+import type { LtiServiceError } from '../src/errors/ltiServiceError.js';
 import { TokenService } from '../src/services/token.service.js';
 
 // Mock fetch globally
@@ -108,7 +109,9 @@ describe('TokenService', () => {
       const [_url, options] = mockFetch.mock.calls[0];
       const headers = options.headers as Headers;
       expect(headers.get('Content-Type')).toBe('application/x-www-form-urlencoded');
-      expect(headers.get('User-Agent')).toMatch(/^lti-tool\/\d+\.\d+\.\d+/);
+      expect(headers.get('User-Agent')).toMatch(
+        /^@longsightgroup\/lti-tool\/\d+\.\d+\.\d+/,
+      );
 
       // Verify URLSearchParams content
       const fetchCall = mockFetch.mock.calls[0];
@@ -122,12 +125,10 @@ describe('TokenService', () => {
     });
 
     it('throws error when HTTP request fails', async () => {
-      const mockResponse = {
-        ok: false,
-        status: 400,
-        statusText: 'Bad Request',
-        json: vi.fn().mockResolvedValue('Error details'),
-      };
+      const mockResponse = Response.json(
+        { error: 'invalid_client', error_description: 'Bad client' },
+        { status: 400, statusText: 'Bad Request' },
+      );
       mockFetch.mockResolvedValue(mockResponse);
 
       await expect(
@@ -136,7 +137,17 @@ describe('TokenService', () => {
           'https://platform.example.com/token',
           'scope',
         ),
-      ).rejects.toThrow('Token request failed: 400 Bad Request');
+      ).rejects.toMatchObject({
+        name: 'LtiServiceError',
+        code: 'token_request_failed',
+        serviceKind: 'token',
+        operation: 'getBearerToken',
+        endpointType: 'token',
+        status: 400,
+        statusText: 'Bad Request',
+        responseBodySummary:
+          '{"error":"invalid_client","error_description":"Bad client"}',
+      } satisfies Partial<LtiServiceError>);
     });
 
     it('throws error when response has no access_token', async () => {

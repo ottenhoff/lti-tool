@@ -59,3 +59,10 @@ export {
   type Context,
   type Member,
 } from './lti13/nrps/contextMembership.schema.js';
+export type {
+  CreateLineItem,
+  LineItem,
+  LineItems,
+  UpdateLineItem,
+} from './lti13/ags/lineItem.schema.js';
+export type { ScoreSubmission } from './lti13/ags/scoreSubmission.schema.js';

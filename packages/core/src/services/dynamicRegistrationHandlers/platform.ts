@@ -1,6 +1,10 @@
-import type { BaseLogger } from 'pino';
+import type { LtiLogger } from '../../interfaces/ltiLogger.js';
 
 import { LTI_AGS_SCOPE_PREFIX } from '../../constants.js';
+import {
+  LtiServiceError,
+  summarizeLtiServiceResponseBody,
+} from '../../errors/ltiServiceError.js';
 import {
   RegistrationResponseSchema,
   type OpenIDConfiguration,
@@ -159,7 +163,7 @@ export function renderDynamicRegistrationForm(
 export async function postRegistrationToPlatform(
   registrationEndpoint: string,
   registrationPayload: unknown,
-  logger: BaseLogger,
+  logger: LtiLogger,
   registrationToken?: string,
 ): Promise<RegistrationResponse> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -174,9 +178,24 @@ export async function postRegistrationToPlatform(
   });
 
   if (!response.ok) {
-    const errorText = await response.json();
-    logger.error({ errorText }, 'lti dynamic registration error');
-    throw new Error(JSON.stringify(errorText));
+    const responseBodySummary = await summarizeLtiServiceResponseBody(response);
+    logger.error(
+      {
+        status: response.status,
+        statusText: response.statusText,
+        responseBodySummary,
+      },
+      'lti dynamic registration rejected by platform',
+    );
+    throw new LtiServiceError({
+      code: 'platform_registration_rejected',
+      serviceKind: 'dynamic_registration',
+      operation: 'completeDynamicRegistration',
+      message: 'Platform rejected dynamic registration',
+      status: response.status,
+      statusText: response.statusText,
+      responseBodySummary,
+    });
   }
 
   const data = await response.json();

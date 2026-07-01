@@ -1,12 +1,14 @@
-import type {
-  LTIClient,
-  LTIDeployment,
-  LTIDynamicRegistrationSession,
-  LTILaunchConfig,
-  LTISession,
-  LTIStorage,
-} from '@lti-tool/core';
-import type { Logger } from 'pino';
+import {
+  createNoopLogger,
+  LtiStorageConflictError,
+  type LTIClient,
+  type LTIDeployment,
+  type LTIDynamicRegistrationSession,
+  type LTILaunchConfig,
+  type LTISession,
+  type LTIStorage,
+} from '@longsightgroup/lti-tool';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 import type { MemoryStorageConfig } from './interfaces/memoryStorageConfig.js';
 
@@ -37,32 +39,19 @@ export class MemoryStorage implements LTIStorage {
   private clientLookup = new Map<string, string>(); // issuer#clientId -> internalClientId
 
   private sessions = new Map<string, LTISession>();
-  private nonces = new Map<string, Date>(); // nonce -> expiration date
+  private usedNonces = new Set<string>();
   private registrationSessions = new Map<string, LTIDynamicRegistrationSession>();
-  private logger: Logger;
+  private logger: LtiLogger;
 
   constructor(config?: MemoryStorageConfig) {
-    this.logger =
-      config?.logger ??
-      ({
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      } as unknown as Logger);
-  }
-
-  getDeploymentById(
-    // oxlint-disable-next-line no-unused-vars
-    clientId: string, // oxlint-disable no-unused-vars
-    deploymentId: string,
-  ): Promise<LTIDeployment | undefined> {
-    return this.getDeployment(clientId, deploymentId);
+    this.logger = config?.logger ?? createNoopLogger();
   }
 
   // oxlint-disable-next-line require-await
-  async listClients(): Promise<LTIClient[]> {
-    return [...this.clients.values()];
+  async listClients(): Promise<Omit<LTIClient, 'deployments'>[]> {
+    return [...this.clients.values()].map(({ deployments: _deployments, ...client }) => {
+      return client;
+    });
   }
 
   // oxlint-disable-next-line require-await
@@ -72,6 +61,14 @@ export class MemoryStorage implements LTIStorage {
 
   // oxlint-disable-next-line require-await
   async addClient(client: Omit<LTIClient, 'id' | 'deployments'>): Promise<string> {
+    const lookupKey = `${client.iss}#${client.clientId}`;
+    if (this.clientLookup.has(lookupKey)) {
+      throw new LtiStorageConflictError({
+        operation: 'addClient',
+        message: `Client already exists for issuer ${client.iss} and client ID ${client.clientId}`,
+      });
+    }
+
     const clientId = crypto.randomUUID();
     const clientWithId = { ...client, id: clientId, deployments: [] };
 
@@ -92,8 +89,36 @@ export class MemoryStorage implements LTIStorage {
     clientId: string,
     client: Partial<Omit<LTIClient, 'id' | 'deployments'>>,
   ): Promise<void> {
-    // does nothing; in production we support updates
-    this.logger.warn({ clientId, client }, 'updateClient not implemented');
+    const existing = this.clients.get(clientId);
+    if (!existing) {
+      throw new Error('Client not found');
+    }
+
+    this.clientLookup.delete(`${existing.iss}#${existing.clientId}`);
+
+    const updated = { ...existing, ...client, id: existing.id };
+    this.clients.set(clientId, updated);
+    this.clientLookup.set(`${updated.iss}#${updated.clientId}`, clientId);
+
+    if (client.iss !== undefined || client.clientId !== undefined) {
+      this.reindexDeployments(updated, existing.iss, existing.clientId);
+    }
+  }
+
+  private reindexDeployments(
+    client: LTIClient,
+    previousIss: string,
+    previousClientId: string,
+  ): void {
+    for (const deployment of client.deployments) {
+      this.deployments.delete(
+        `${previousIss}#${previousClientId}#${deployment.deploymentId}`,
+      );
+      this.deployments.set(
+        `${client.iss}#${client.clientId}#${deployment.deploymentId}`,
+        deployment,
+      );
+    }
   }
 
   // oxlint-disable-next-line require-await
@@ -102,7 +127,7 @@ export class MemoryStorage implements LTIStorage {
     if (client) {
       // Clean up deployments
       for (const deployment of client.deployments) {
-        const compositeKey = `${client.iss}#${client.clientId}#${deployment.id}`;
+        const compositeKey = `${client.iss}#${client.clientId}#${deployment.deploymentId}`;
         this.deployments.delete(compositeKey);
       }
       // Clean up lookup
@@ -115,13 +140,13 @@ export class MemoryStorage implements LTIStorage {
   async listDeployments(clientId: string): Promise<LTIDeployment[]> {
     const client = this.clients.get(clientId);
     if (!client) {
-      throw new Error(`Client not found: ${clientId}`);
+      return [];
     }
     return client.deployments;
   }
 
   // oxlint-disable-next-line require-await
-  async getDeployment(
+  async getDeploymentByPlatformId(
     clientId: string,
     deploymentId: string,
   ): Promise<LTIDeployment | undefined> {
@@ -153,42 +178,58 @@ export class MemoryStorage implements LTIStorage {
   }
 
   // oxlint-disable-next-line require-await
-  async updateDeployment(
+  async updateDeploymentById(
     clientId: string,
     deploymentId: string,
     deployment: Partial<LTIDeployment>,
   ): Promise<void> {
-    this.logger.warn({ deploymentId, deployment }, 'updateDeployment not implemented');
+    const client = this.clients.get(clientId);
+    if (!client) {
+      throw new Error(`Client not found: ${clientId}`);
+    }
+
+    const existing = client.deployments.find(
+      (candidate) => candidate.id === deploymentId,
+    );
+    if (!existing) {
+      throw new Error('Deployment not found');
+    }
+
+    const updated = { ...existing, ...deployment, id: existing.id };
+    const oldCompositeKey = `${client.iss}#${client.clientId}#${existing.deploymentId}`;
+    const newCompositeKey = `${client.iss}#${client.clientId}#${updated.deploymentId}`;
+    const index = client.deployments.findIndex(
+      (candidate) => candidate.id === deploymentId,
+    );
+    client.deployments[index] = updated;
+    this.deployments.delete(oldCompositeKey);
+    this.deployments.set(newCompositeKey, updated);
   }
 
   // oxlint-disable-next-line require-await
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
-    this.logger.warn({ clientId, deploymentId }, 'deleteDeployment not implemented');
-  }
+  async deleteDeploymentById(clientId: string, deploymentId: string): Promise<void> {
+    const client = this.clients.get(clientId);
+    if (!client) return;
 
-  // oxlint-disable-next-line require-await
-  async storeNonce(nonce: string, expiresAt: Date): Promise<void> {
-    this.nonces.set(nonce, expiresAt);
-    this.logger.debug({ nonce, expiresAt }, 'nonce stored with expiration');
+    const existing = client.deployments.find(
+      (candidate) => candidate.id === deploymentId,
+    );
+    if (!existing) return;
+
+    client.deployments = client.deployments.filter(
+      (candidate) => candidate.id !== deploymentId,
+    );
+    this.deployments.delete(`${client.iss}#${client.clientId}#${existing.deploymentId}`);
   }
 
   // oxlint-disable-next-line require-await
   async validateNonce(nonce: string): Promise<boolean> {
-    const expiresAt = this.nonces.get(nonce);
-
-    if (!expiresAt) {
-      this.logger.warn({ nonce }, 'nonce not found - invalid nonce');
+    if (this.usedNonces.has(nonce)) {
+      this.logger.warn({ nonce }, 'nonce already used - replay attack detected');
       return false;
     }
 
-    if (expiresAt < new Date()) {
-      this.logger.warn({ nonce, expiresAt }, 'nonce expired');
-      this.nonces.delete(nonce); // Clean up expired nonce
-      return false;
-    }
-
-    // Mark as used by deleting it (one-time use)
-    this.nonces.delete(nonce);
+    this.usedNonces.add(nonce);
     this.logger.debug({ nonce }, 'nonce validated and consumed');
     return true;
   }
@@ -234,7 +275,10 @@ export class MemoryStorage implements LTIStorage {
       return undefined;
     }
 
-    const deployment = client.deployments.find((d) => d.deploymentId === deploymentId);
+    const deployment = await this.getDeploymentByPlatformId(
+      clientInternalId,
+      deploymentId,
+    );
     if (!deployment) {
       this.logger.warn({ deploymentId }, 'deployment not found');
       return undefined;

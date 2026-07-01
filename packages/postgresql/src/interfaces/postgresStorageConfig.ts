@@ -1,12 +1,17 @@
-import type { Logger } from 'pino';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
+import type postgres from 'postgres';
 
 export interface PostgresStorageConfig {
-  logger?: Logger;
+  logger?: LtiLogger;
   /**
    * PostgreSQL connection URL in format: postgresql://user:password@host:port/database
    * Compatible with DATABASE_URL environment variable used by most ORMs
    */
   connectionUrl: string;
+  /**
+   * Optional pre-created postgres.js client (used by integration test harnesses).
+   */
+  sql?: postgres.Sql;
   /**
    * Optional postgres.js connection options
    */

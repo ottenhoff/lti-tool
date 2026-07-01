@@ -1,205 +1,37 @@
-// oxlint-disable max-lines-per-function typescript/no-explicit-any
-import type { LTIClient, LTIDeployment, LTISession } from '@lti-tool/core';
 import 'dotenv/config';
-import { drizzle } from 'drizzle-orm/mysql2';
-import mysql from 'mysql2/promise';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import * as schema from '../src/db/schema/index.js';
-import { MySqlStorage } from '../src/index.js';
+import {
+  createMySqlHarness,
+  type MySqlStorageHarness,
+} from '#test-harness/storage/mysql';
+import { defineStorageConformanceSuite } from '#test-harness/storageConformance';
 
-let storage: MySqlStorage;
-let pool: mysql.Pool;
-let db: any;
-
-const testClient: Omit<LTIClient, 'id'> = {
-  name: 'Test Platform',
-  iss: 'https://platform.example.com',
-  clientId: 'test-client-123',
-  authUrl: 'https://platform.example.com/auth',
-  tokenUrl: 'https://platform.example.com/token',
-  jwksUrl: 'https://platform.example.com/.well-known/jwks',
-  deployments: [],
-};
-
-const testDeployment: Omit<LTIDeployment, 'id'> = {
-  deploymentId: 'deployment-456',
-  name: 'Test Deployment',
-  description: 'A test deployment',
-};
-
-const testSession: LTISession = {
-  id: 'session-789',
-  jwtPayload: { iss: 'https://platform.example.com' },
-  user: { id: 'user123', roles: ['Learner'] },
-  context: { id: 'context123', label: 'TEST101', title: 'Test Course' },
-  platform: {
-    issuer: 'https://platform.example.com',
-    clientId: 'test-client-123',
-    deploymentId: 'deployment-456',
-    name: 'Test Platform',
+defineStorageConformanceSuite('MySqlStorage', {
+  capabilities: {
+    expiredNonces: true,
+    expiredSessions: true,
+    expiredRegistrationSessions: true,
   },
-  launch: { target: 'https://tool.example.com/launch' },
-  customParameters: {},
-  isAdmin: false,
-  isInstructor: false,
-  isStudent: true,
-  isAssignmentAndGradesAvailable: false,
-  isDeepLinkingAvailable: false,
-  isNameAndRolesAvailable: false,
-};
-
-beforeAll(() => {
-  // env var or local podman / docker container credentials
-  const connectionUrl =
-    process.env.DATABASE_URL || 'mysql://lti_user:lti_password@localhost:3306/lti_test';
-  pool = mysql.createPool({ uri: connectionUrl });
-  db = drizzle(pool, { schema, mode: 'default' });
-
-  storage = new MySqlStorage({ connectionUrl });
+  createStorage: () => createMySqlHarness(),
 });
 
-afterAll(async () => {
-  // close the drizzle pool
-  await storage.close();
+describe('MySqlStorage cleanup', () => {
+  let harness: MySqlStorageHarness;
 
-  // close the vitest pool
-  await pool.end();
-});
-
-beforeEach(async () => {
-  // Clean all tables between tests
-  await db.delete(schema.deploymentsTable);
-  await db.delete(schema.clientsTable);
-  await db.delete(schema.sessionsTable);
-  await db.delete(schema.noncesTable);
-  await db.delete(schema.registrationSessionsTable);
-});
-
-describe('MySqlStorage - Client Operations', () => {
-  it('should add and retrieve a client', async () => {
-    const clientId = await storage.addClient(testClient);
-    expect(clientId).toBeTruthy();
-
-    const retrieved = await storage.getClientById(clientId);
-    expect(retrieved).toBeDefined();
-    expect(retrieved?.name).toBe(testClient.name);
-    expect(retrieved?.iss).toBe(testClient.iss);
-    expect(retrieved?.deployments).toEqual([]);
+  beforeEach(() => {
+    harness = createMySqlHarness();
   });
 
-  it('should list all clients', async () => {
-    await storage.addClient(testClient);
-    await storage.addClient({ ...testClient, clientId: 'another-client' });
-
-    const clients = await storage.listClients();
-    expect(clients.length).toBeGreaterThanOrEqual(2);
+  afterEach(async () => {
+    await harness.dispose();
   });
 
-  it('should delete a client and its deployments', async () => {
-    const clientId = await storage.addClient(testClient);
-    await storage.addDeployment(clientId, testDeployment);
+  it('deletes expired items', async () => {
+    await harness.seedExpiredNonce('expired-nonce');
 
-    await storage.deleteClient(clientId);
+    const result = await harness.storage.cleanup();
 
-    const retrieved = await storage.getClientById(clientId);
-    expect(retrieved).toBeUndefined();
-  });
-});
-
-describe('MySqlStorage - Deployment Operations', () => {
-  let clientId: string;
-
-  beforeEach(async () => {
-    clientId = await storage.addClient(testClient);
-  });
-
-  it('should add and retrieve a deployment', async () => {
-    const deploymentId = await storage.addDeployment(clientId, testDeployment);
-
-    const retrieved = await storage.getDeployment(clientId, deploymentId);
-    expect(retrieved?.deploymentId).toBe(testDeployment.deploymentId);
-  });
-
-  it('should list deployments', async () => {
-    await storage.addDeployment(clientId, testDeployment);
-    await storage.addDeployment(clientId, { ...testDeployment, deploymentId: 'dep-2' });
-
-    const deployments = await storage.listDeployments(clientId);
-    expect(deployments.length).toBe(2);
-  });
-});
-
-describe('MySqlStorage - Session Operations', () => {
-  it('should add and retrieve a session', async () => {
-    await storage.addSession(testSession);
-
-    const retrieved = await storage.getSession(testSession.id);
-    expect(retrieved?.user.id).toBe(testSession.user.id);
-  });
-
-  it('should not retrieve expired sessions', async () => {
-    await db.insert(schema.sessionsTable).values({
-      id: 'expired',
-      data: testSession,
-      expiresAt: new Date(Date.now() - 1000),
-    });
-
-    const retrieved = await storage.getSession('expired');
-    expect(retrieved).toBeUndefined();
-  });
-});
-
-describe('MySqlStorage - Nonce Validation', () => {
-  it('should validate a new nonce', async () => {
-    const result = await storage.validateNonce('unique-nonce');
-    expect(result).toBe(true);
-  });
-
-  it('should reject duplicate nonce', async () => {
-    await storage.validateNonce('dup-nonce');
-    const result = await storage.validateNonce('dup-nonce');
-    expect(result).toBe(false);
-  });
-});
-
-describe('MySqlStorage - Launch Config', () => {
-  it('should derive launch config from join', async () => {
-    const clientId = await storage.addClient(testClient);
-    await storage.addDeployment(clientId, testDeployment);
-
-    const config = await storage.getLaunchConfig(
-      testClient.iss,
-      testClient.clientId,
-      testDeployment.deploymentId,
-    );
-
-    expect(config?.iss).toBe(testClient.iss);
-    expect(config?.authUrl).toBe(testClient.authUrl);
-  });
-
-  it('should fallback to default deployment', async () => {
-    const clientId = await storage.addClient(testClient);
-    await storage.addDeployment(clientId, { deploymentId: 'default' });
-
-    const config = await storage.getLaunchConfig(
-      testClient.iss,
-      testClient.clientId,
-      'nonexistent',
-    );
-
-    expect(config?.deploymentId).toBe('default');
-  });
-});
-
-describe('MySqlStorage - Cleanup', () => {
-  it('should delete expired items', async () => {
-    await db.insert(schema.noncesTable).values({
-      nonce: 'expired-nonce',
-      expiresAt: new Date(Date.now() - 1000),
-    });
-
-    const result = await storage.cleanup();
     expect(result.noncesDeleted).toBe(1);
   });
 });

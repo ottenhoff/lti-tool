@@ -1,36 +1,33 @@
 // oxlint-disable max-lines-per-function
-import {
-  ConditionalCheckFailedException,
-  DynamoDBClient,
-} from '@aws-sdk/client-dynamodb';
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { marshall } from '@aws-sdk/util-dynamodb';
-import type { LTIClient, LTISession } from '@lti-tool/core';
-import type { BaseLogger } from 'pino';
+import {
+  createNoopLogger,
+  type LTIClient,
+  type LTISession,
+} from '@longsightgroup/lti-tool';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LAUNCH_CONFIG_CACHE, SESSION_CACHE } from '../src/cacheConfig.js';
+import { testSession } from '#test-harness/fixtures';
+
+import { LAUNCH_CONFIG_CACHE } from '../src/cacheConfig.js';
 import { DynamoDbStorage } from '../src/index.js';
 
-vi.mock('@aws-sdk/client-dynamodb');
+const mockSend = vi.hoisted(() => vi.fn());
 
-const mockSend = vi.fn();
-vi.mocked(DynamoDBClient).mockImplementation(function () {
+vi.mock('@aws-sdk/client-dynamodb', async (importOriginal) => {
+  const actual = (await importOriginal()) as object;
+
   return {
-    send: mockSend,
-  } as unknown as DynamoDBClient;
+    ...actual,
+    DynamoDBClient: vi.fn(function () {
+      return {
+        send: mockSend,
+      };
+    }),
+  };
 });
 
-const mockLogger = {
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  silent: vi.fn(),
-  level: 'info',
-  msgPrefix: '',
-} as BaseLogger;
 const mockClient: LTIClient = {
   id: 'client-uuid-123',
   iss: 'https://platform.example.com',
@@ -56,26 +53,15 @@ const mockLaunchConfig = {
   jwksUrl: 'https://platform.example.com/.well-known/jwks',
 };
 
-const mockSession: LTISession = {
+const mockSession: LTISession = testSession({
   id: 'session123',
-  jwtPayload: {},
-  user: { id: 'user123', roles: [] },
-  context: { id: 'context123', label: 'TEST', title: 'Test' },
   platform: {
     issuer: 'https://platform.example.com',
     clientId: 'client123',
     deploymentId: 'deployment1',
     name: 'Test',
   },
-  launch: { target: 'https://tool.example.com/v1p3/debug' },
-  customParameters: {},
-  isAdmin: false,
-  isInstructor: false,
-  isStudent: false,
-  isAssignmentAndGradesAvailable: false,
-  isDeepLinkingAvailable: false,
-  isNameAndRolesAvailable: false,
-};
+});
 
 describe('DynamoDbStorage', () => {
   let storage: DynamoDbStorage;
@@ -83,7 +69,6 @@ describe('DynamoDbStorage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     LAUNCH_CONFIG_CACHE.clear();
-    SESSION_CACHE.clear();
 
     // Reset mock implementation to ensure clean state
     mockSend.mockReset();
@@ -92,8 +77,37 @@ describe('DynamoDbStorage', () => {
       controlPlaneTable: 'controlPlane',
       dataPlaneTable: 'dataPlane',
       launchConfigTable: 'launchConfigs',
-      // oxlint-disable no-explicit-anyq
-      logger: mockLogger as any,
+      logger: createNoopLogger(),
+    });
+  });
+
+  describe('getDeploymentByPlatformId', () => {
+    it('queries the platform deployment lookup index directly', async () => {
+      mockSend.mockResolvedValue({
+        ...dynamoOk(),
+        Items: [
+          marshall({
+            pk: 'C#client-uuid-123',
+            sk: 'D#deployment',
+            gsi2pk: 'C#client-uuid-123',
+            gsi2sk: 'PD#deployment1',
+            type: 'Deployment',
+            id: 'deployment',
+            deploymentId: 'deployment1',
+          }),
+        ],
+      });
+
+      const result = await storage.getDeploymentByPlatformId(
+        'client-uuid-123',
+        'deployment1',
+      );
+
+      expect(result).toMatchObject({
+        id: 'deployment',
+        deploymentId: 'deployment1',
+      });
+      expect(commandInput(mockSend.mock.calls[0]?.[0]).IndexName).toBe('GSI2');
     });
   });
 
@@ -149,22 +163,15 @@ describe('DynamoDbStorage', () => {
         ],
       });
 
-      // Mock the PutItem update operation
+      // Mock the PutItem update operation and launch config sync query.
       mockSend.mockResolvedValueOnce({ $metadata: { httpStatusCode: 200 } });
-
-      // Spy on updateClientLaunchConfigs to avoid the complex mocking
-      const updateLaunchConfigsSpy = vi
-        .spyOn(storage as any, 'updateClientLaunchConfigs')
-        .mockResolvedValue(undefined);
+      mockSend.mockResolvedValueOnce({ $metadata: { httpStatusCode: 200 }, Items: [] });
 
       await storage.updateClient('client-uuid-123', {
         name: 'Updated',
       });
 
-      expect(mockSend).toHaveBeenCalledTimes(2); // getClientById + PutItem
-      expect(updateLaunchConfigsSpy).toHaveBeenCalledWith('client-uuid-123');
-
-      updateLaunchConfigsSpy.mockRestore();
+      expect(mockSend).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -195,15 +202,6 @@ describe('DynamoDbStorage', () => {
   });
 
   describe('getSession', () => {
-    it('returns cached session', async () => {
-      SESSION_CACHE.set('session123', mockSession);
-
-      const result = await storage.getSession('session123');
-
-      expect(result).toEqual(mockSession);
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
     it('fetches from DynamoDB', async () => {
       mockSend.mockResolvedValue({
         $metadata: { httpStatusCode: 200 },
@@ -214,6 +212,18 @@ describe('DynamoDbStorage', () => {
 
       expect(result).toEqual(expect.objectContaining({ id: 'session123' }));
     });
+
+    it('returns undefined when DynamoDB has no session item', async () => {
+      mockSend.mockResolvedValue({
+        $metadata: { httpStatusCode: 200 },
+        Item: undefined,
+      });
+
+      const result = await storage.getSession('missing-session');
+
+      expect(result).toBeUndefined();
+      expect(mockSend).toHaveBeenCalledOnce();
+    });
   });
 
   describe('addSession', () => {
@@ -223,7 +233,6 @@ describe('DynamoDbStorage', () => {
       await storage.addSession(mockSession);
 
       expect(mockSend).toHaveBeenCalledOnce();
-      expect(SESSION_CACHE.get('session123')).toEqual(mockSession);
     });
   });
 
@@ -266,3 +275,13 @@ describe('DynamoDbStorage', () => {
     });
   });
 });
+
+function commandInput(command: unknown): {
+  readonly IndexName?: string;
+} {
+  return (command as { readonly input: { readonly IndexName?: string } }).input;
+}
+
+function dynamoOk(): { readonly $metadata: { readonly httpStatusCode: number } } {
+  return { $metadata: { httpStatusCode: 200 } };
+}

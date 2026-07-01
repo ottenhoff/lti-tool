@@ -1,42 +1,10 @@
 import { exportJWK, SignJWT } from 'jose';
-import type { Logger } from 'pino';
-
 import type { JWKS } from './interfaces/jwks.js';
-import type { LTIClient } from './interfaces/ltiClient.js';
 import type { LTIConfig } from './interfaces/ltiConfig.js';
-import type { LTIDeployment } from './interfaces/ltiDeployment.js';
-import type { LTIDynamicRegistrationSession } from './interfaces/ltiDynamicRegistrationSession.js';
+import type { LtiLogger } from './interfaces/ltiLogger.js';
 import type { LTISession } from './interfaces/ltiSession.js';
-import { AddClientSchema, UpdateClientSchema } from './schemas/client.schema.js';
-import {
-  type DynamicRegistrationForm,
-  HandleLoginParamsSchema,
-  type LTI13JwtPayload,
-  type RegistrationRequest,
-  SessionIdSchema,
-} from './schemas/index.js';
-import {
-  type CreateLineItem,
-  type LineItem,
-  type LineItems,
-  LineItemSchema,
-  LineItemsSchema,
-  type UpdateLineItem,
-} from './schemas/lti13/ags/lineItem.schema.js';
-import { type Results, ResultsSchema } from './schemas/lti13/ags/result.schema.js';
-import { type ScoreSubmission } from './schemas/lti13/ags/scoreSubmission.schema.js';
-import { type DeepLinkingContentItem } from './schemas/lti13/deepLinking/contentItem.schema.js';
-import { type OpenIDConfiguration } from './schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
-import { type Member } from './schemas/lti13/nrps/contextMembership.schema.js';
-import {
-  AGSService,
-  type AGSGetScoresOptions,
-  type AGSLineItemTargetOptions,
-  type AGSListLineItemsOptions,
-} from './services/ags.service.js';
-import { DeepLinkingService } from './services/deepLinking.service.js';
-import { DynamicRegistrationService } from './services/dynamicRegistration.service.js';
-import { NRPSService } from './services/nrps.service.js';
+import { LtiAdvantage } from './ltiAdvantage.js';
+import { HandleLoginParamsSchema, SessionIdSchema } from './schemas/index.js';
 import { createSession } from './services/session.service.js';
 import { TokenService } from './services/token.service.js';
 import { formatError } from './utils/errorFormatting.js';
@@ -47,16 +15,15 @@ import {
   type LtiAuthorizedLaunch,
   LtiLaunchVerificationError,
   type LtiLaunchVerificationResult,
-  type LtiVerifyLaunchDetailedOptions,
+  type LtiVerifyLaunchOptions,
   type LtiVerifiedLaunch,
   verifyLtiLaunch,
 } from './utils/ltiLaunchVerification.js';
 import { buildLtiLoginAuthUrl } from './utils/ltiLogin.js';
-import { normalizeLtiNrpsMembersResponse } from './utils/nrps.js';
+import { createNoopLogger } from './utils/noopLogger.js';
 
 /**
- * Main LTI 1.3 Tool implementation providing secure authentication, launch verification,
- * and LTI Advantage services integration.
+ * LTI 1.3 protocol facade for secure login, launch verification, JWKS, and sessions.
  *
  * @example
  * ```typescript
@@ -66,7 +33,6 @@ import { normalizeLtiNrpsMembersResponse } from './utils/nrps.js';
  *   storage: new MemoryStorage()
  * });
  *
- * // Handle login initiation
  * const authUrl = await ltiTool.handleLogin({
  *   client_id: 'your-client-id',
  *   iss: 'https://platform.example.com',
@@ -80,13 +46,8 @@ import { normalizeLtiNrpsMembersResponse } from './utils/nrps.js';
 export class LTITool {
   /** Cache for JWKS remote key sets to improve performance */
   private jwksCache: LtiLaunchJwksCache = new Map();
-  private verifiedLaunchClientIds = new WeakMap<LTI13JwtPayload, string>();
-  private logger: Logger;
+  private logger: LtiLogger;
   private tokenService: TokenService;
-  private agsService: AGSService;
-  private nrpsService: NRPSService;
-  private deepLinkingService: DeepLinkingService;
-  private dynamicRegistrationService?: DynamicRegistrationService;
 
   /**
    * Creates a new LTI Tool instance.
@@ -94,37 +55,12 @@ export class LTITool {
    * @param config - Configuration object containing secrets, keys, and storage adapter
    */
   constructor(private config: LTIConfig) {
-    this.logger =
-      config.logger ??
-      ({
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      } as unknown as Logger);
+    this.logger = config.logger ?? createNoopLogger();
 
     this.tokenService = new TokenService(
       this.config.keyPair,
       this.config.security?.keyId ?? 'main',
     );
-    this.agsService = new AGSService(this.tokenService, this.config.storage, this.logger);
-    this.nrpsService = new NRPSService(
-      this.tokenService,
-      this.config.storage,
-      this.logger,
-    );
-    this.deepLinkingService = new DeepLinkingService(
-      this.config.keyPair,
-      this.logger,
-      this.config.security?.keyId ?? 'main',
-    );
-    if (this.config.dynamicRegistration) {
-      this.dynamicRegistrationService = new DynamicRegistrationService(
-        this.config.storage,
-        this.config.dynamicRegistration,
-        this.logger,
-      );
-    }
   }
 
   /**
@@ -154,11 +90,6 @@ export class LTITool {
       const validatedParams = HandleLoginParamsSchema.parse(params);
 
       const nonce = crypto.randomUUID();
-
-      // Store nonce with expiration for replay attack prevention
-      const nonceExpirationSeconds = this.config.security?.nonceExpirationSeconds ?? 600;
-      const nonceExpiresAt = new Date(Date.now() + nonceExpirationSeconds * 1000);
-      await this.config.storage.storeNonce(nonce, nonceExpiresAt);
 
       const state = await new SignJWT({
         nonce,
@@ -193,51 +124,26 @@ export class LTITool {
   }
 
   /**
-   * Verifies and validates an LTI 1.3 launch by checking JWT signatures, nonces, and claims.
-   *
-   * Performs comprehensive security validation including:
-   * - JWT signature verification using platform's JWKS
-   * - State JWT verification to prevent CSRF
-   * - Nonce validation to prevent replay attacks
-   * - Client ID and deployment ID verification
-   * - Target link URI binding to the value requested during login initiation
-   * - LTI 1.3 claim structure validation
-   *
-   * @param idToken - JWT id_token received from platform after authentication
-   * @param state - State JWT that was generated during login initiation
-   * @returns Validated and parsed LTI 1.3 JWT payload
-   * @throws {Error} When verification fails for security reasons
-   */
-  async verifyLaunch(idToken: string, state: string): Promise<LTI13JwtPayload> {
-    try {
-      const verifiedLaunch = await this.verifyLaunchInternal(idToken, state);
-      return verifiedLaunch.payload;
-    } catch (error) {
-      throw new Error(`[LTI] Launch verification failed: ${formatError(error)}`);
-    }
-  }
-
-  /**
    * Verifies an LTI 1.3 launch and returns structured success or failure details.
    *
-   * This method performs the same security checks as verifyLaunch, but callers receive
-   * a stable error code and verified launch context instead of a thrown generic Error.
+   * Performs JWT, state, nonce, client, deployment, target URI, and claim validation.
+   * Callers receive a stable error code and verified launch context.
    */
-  async verifyLaunchDetailed(
+  async verifyLaunch(
     idToken: string,
     state: string,
   ): Promise<LtiLaunchVerificationResult>;
 
-  async verifyLaunchDetailed<TAuthorization>(
+  async verifyLaunch<TAuthorization>(
     idToken: string,
     state: string,
-    options: LtiVerifyLaunchDetailedOptions<TAuthorization>,
+    options: LtiVerifyLaunchOptions<TAuthorization>,
   ): Promise<LtiLaunchVerificationResult<LtiAuthorizedLaunch<TAuthorization>>>;
 
-  async verifyLaunchDetailed<TAuthorization>(
+  async verifyLaunch<TAuthorization>(
     idToken: string,
     state: string,
-    options?: LtiVerifyLaunchDetailedOptions<TAuthorization>,
+    options?: LtiVerifyLaunchOptions<TAuthorization>,
   ): Promise<LtiLaunchVerificationResult> {
     try {
       const launch = await this.verifyLaunchInternal(idToken, state);
@@ -278,7 +184,6 @@ export class LTITool {
       jwksCache: this.jwksCache,
     });
 
-    this.verifiedLaunchClientIds.set(launch.payload, launch.clientId);
     return launch;
   }
 
@@ -306,40 +211,25 @@ export class LTITool {
   }
 
   /**
-   * Creates and stores a new LTI session from validated JWT payload.
+   * Creates and stores a new LTI session from a previously verified launch.
    *
-   * @param lti13JwtPayload - Validated LTI 1.3 JWT payload from successful launch
-   * @param clientId - Verified tool client ID when the JWT has multiple audiences. Required if the payload was not returned directly from verifyLaunch on this LTITool instance.
+   * This preserves the verified client ID for multi-audience launch tokens.
+   *
+   * @param launch - Verified launch returned by verifyLaunch()
    * @returns Created session object with user, context, and service information
    */
-  async createSession(
-    lti13JwtPayload: LTI13JwtPayload,
-    clientId?: string,
-  ): Promise<LTISession> {
+  async createSessionFromVerifiedLaunch(launch: LtiVerifiedLaunch): Promise<LTISession> {
     try {
-      const session = createSession(lti13JwtPayload, {
-        clientId: clientId ?? this.verifiedLaunchClientIds.get(lti13JwtPayload),
+      const session = createSession(launch.payload, {
+        clientId: launch.clientId,
       });
       await this.config.storage.addSession(session);
       return session;
     } catch (error) {
       throw new Error(
-        `[Session] Creation failed for user '${lti13JwtPayload.sub}': ${formatError(error)}`,
+        `[Session] Creation failed for user '${launch.payload.sub}': ${formatError(error)}`,
       );
     }
-  }
-
-  /**
-   * Creates and stores a new LTI session from a previously verified launch.
-   *
-   * This is the recommended session creation path after verifyLaunchDetailed(), because it
-   * preserves the verified client ID for multi-audience launch tokens.
-   *
-   * @param launch - Verified launch returned by verifyLaunchDetailed()
-   * @returns Created session object with user, context, and service information
-   */
-  async createSessionFromVerifiedLaunch(launch: LtiVerifiedLaunch): Promise<LTISession> {
-    return await this.createSession(launch.payload, launch.clientId);
   }
 
   /**
@@ -360,598 +250,19 @@ export class LTITool {
   }
 
   /**
-   * Submits a grade score to the platform using Assignment and Grade Services (AGS).
+   * Creates session-bound LTI Advantage services for AGS, NRPS, and Deep Linking.
    *
-   * @param session - Active LTI session containing AGS service endpoints
-   * @param score - Score submission data including grade value and user ID
-   * @throws {Error} When AGS is not available or submission fails
+   * @param session - Active LTI launch session containing advertised service endpoints.
+   * @returns Session-bound Advantage service facade.
    */
-  async submitScore(session: LTISession, score: ScoreSubmission): Promise<void> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-    if (!score) {
-      throw new Error('score is required');
-    }
-
-    try {
-      await this.agsService.submitScore(session, score);
-    } catch (error) {
-      throw new Error(
-        `[AGS] Score submission failed for user '${score.userId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Retrieves all scores for a specific line item from the platform using Assignment and Grade Services (AGS).
-   *
-   * @param session - Active LTI session containing AGS service endpoints
-   * @param options - Optional line item target override and AGS result filters
-   * @returns Array of score submissions for the line item
-   * @throws {Error} When AGS is not available or request fails
-   *
-   * @example
-   * ```typescript
-   * const scores = await ltiTool.getScores(session);
-   * console.log('All scores:', scores.map(s => `${s.userId}: ${s.scoreGiven}`));
-   * ```
-   */
-  async getScores(
-    session: LTISession,
-    options: AGSGetScoresOptions = {},
-  ): Promise<Results> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-
-    try {
-      const response = await this.agsService.getScores(session, options);
-      const data = await response.json();
-      return ResultsSchema.parse(data);
-    } catch (error) {
-      throw new Error(
-        `[AGS] Scores retrieval failed for session '${session.id}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Retrieves line items (gradebook columns) from the platform using Assignment and Grade Services (AGS).
-   *
-   * @param session - Active LTI session containing AGS service endpoints
-   * @param options - Optional AGS line item list filters
-   * @returns Array of line items from the platform
-   * @throws {Error} When AGS is not available or request fails
-   */
-  async listLineItems(
-    session: LTISession,
-    options: AGSListLineItemsOptions = {},
-  ): Promise<LineItems> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-
-    try {
-      const response = await this.agsService.listLineItems(session, options);
-      const data = await response.json();
-      return LineItemsSchema.parse(data);
-    } catch (error) {
-      throw new Error(
-        `[AGS] Line items listing failed for session '${session.id}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Retrieves a specific line item (gradebook column) from the platform using Assignment and Grade Services (AGS).
-   *
-   * @param session - Active LTI session containing AGS service endpoints
-   * @returns Line item data from the platform
-   * @throws {Error} When AGS is not available or request fails
-   */
-  async getLineItem(
-    session: LTISession,
-    options: AGSLineItemTargetOptions = {},
-  ): Promise<LineItem> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-
-    try {
-      const response = await this.agsService.getLineItem(session, options);
-      const data = await response.json();
-      return LineItemSchema.parse(data);
-    } catch (error) {
-      throw new Error(
-        `[AGS] Line item retrieval failed for session '${session.id}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Creates a new line item (gradebook column) on the platform using Assignment and Grade Services (AGS).
-   *
-   * @param session - Active LTI session containing AGS service endpoints
-   * @param createLineItem - Line item data including label, scoreMaximum, and optional metadata
-   * @returns Created line item with platform-generated ID and validated data
-   * @throws {Error} When AGS is not available, input validation fails, or creation fails
-   *
-   * @example
-   * ```typescript
-   * const newLineItem = await ltiTool.createLineItem(session, {
-   *   label: 'Quiz 1',
-   *   scoreMaximum: 100,
-   *   tag: 'quiz',
-   *   resourceId: 'quiz-001'
-   * });
-   * console.log('Created line item:', newLineItem.id);
-   * ```
-   */
-  async createLineItem(
-    session: LTISession,
-    createLineItem: CreateLineItem,
-  ): Promise<LineItem> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-    if (!createLineItem) {
-      throw new Error('createLineItem is required');
-    }
-
-    try {
-      const response = await this.agsService.createLineItem(session, createLineItem);
-      const data = await response.json();
-      return LineItemSchema.parse(data);
-    } catch (error) {
-      throw new Error(
-        `[AGS] Line item creation failed for '${createLineItem.label}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Updates an existing line item (gradebook column) on the platform using Assignment and Grade Services (AGS).
-   *
-   * @param session - Active LTI session containing AGS service endpoints
-   * @param updateLineItem - Updated line item data including all required fields
-   * @returns Updated line item with validated data from the platform
-   * @throws {Error} When AGS is not available, input validation fails, or update fails
-   */
-  async updateLineItem(
-    session: LTISession,
-    updateLineItem: UpdateLineItem,
-  ): Promise<LineItem> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-    if (!updateLineItem) {
-      throw new Error('lineItem is required');
-    }
-
-    try {
-      const response = await this.agsService.updateLineItem(session, updateLineItem);
-      const data = await response.json();
-      return LineItemSchema.parse(data);
-    } catch (error) {
-      throw new Error(
-        `[AGS] Line item update failed for '${updateLineItem.label}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Deletes a line item (gradebook column) from the platform using Assignment and Grade Services (AGS).
-   *
-   * @param session - Active LTI session containing AGS service endpoints
-   * @throws {Error} When AGS is not available or deletion fails
-   */
-  async deleteLineItem(session: LTISession): Promise<void> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-
-    try {
-      await this.agsService.deleteLineItem(session);
-    } catch (error) {
-      throw new Error(
-        `[AGS] Line item deletion failed for session '${session.id}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Retrieves course/context members using Names and Role Provisioning Services (NRPS).
-   *
-   * @param session - Active LTI session containing NRPS service endpoints
-   * @returns Array of members with clean camelCase properties
-   * @throws {Error} When NRPS is not available or request fails
-   *
-   * @example
-   * ```typescript
-   * const members = await ltiTool.getMembers(session);
-   * const instructors = members.filter(m =>
-   *   m.roles.some(role => role.includes('Instructor'))
-   * );
-   * ```
-   */
-  async getMembers(session: LTISession): Promise<Member[]> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-
-    try {
-      const response = await this.nrpsService.getMembers(session);
-      const data = await response.json();
-      return normalizeLtiNrpsMembersResponse(data);
-    } catch (error) {
-      throw new Error(
-        `[NRPS] Members retrieval failed for session '${session.id}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Creates a Deep Linking response with selected content items.
-   * Generates a signed JWT and returns HTML form that auto-submits to the platform.
-   *
-   * @param session - Active LTI session containing Deep Linking configuration
-   * @param contentItems - Array of content items selected by the user
-   * @returns HTML string containing auto-submit form
-   * @throws {Error} When Deep Linking is not available for the session
-   *
-   * @example
-   * ```typescript
-   * const html = await ltiTool.createDeepLinkingResponse(session, [
-   *   {
-   *     type: 'ltiResourceLink',
-   *     title: 'Quiz 1',
-   *     url: 'https://tool.example.com/quiz/1'
-   *   }
-   * ]);
-   * // Render the HTML to return content items to platform
-   * ```
-   */
-  async createDeepLinkingResponse(
-    session: LTISession,
-    contentItems: DeepLinkingContentItem[],
-  ): Promise<string> {
-    if (!session) {
-      throw new Error('session is required');
-    }
-    if (!contentItems) {
-      throw new Error('contentItems is required');
-    }
-
-    try {
-      return await this.deepLinkingService.createResponse(session, contentItems);
-    } catch (error) {
-      throw new Error(
-        `[Deep Linking] Response creation failed for session '${session.id}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Fetches and validates the OpenID Connect configuration from an LTI platform during dynamic registration.
-   * Validates that the OIDC endpoint and issuer have matching hostnames for security.
-   *
-   * @param registrationRequest - Registration request containing openid_configuration URL and optional registration_token
-   * @returns Validated OpenID configuration with platform endpoints and supported features
-   * @throws {Error} When the configuration fetch fails, validation fails, or hostname mismatch detected
-   *
-   * @example
-   * ```typescript
-   * const config = await ltiTool.fetchPlatformConfiguration({
-   *   openid_configuration: 'https://platform.edu/.well-known/openid_configuration',
-   *   registration_token: 'optional-bearer-token'
-   * });
-   * console.log('Platform issuer:', config.issuer);
-   * ```
-   */
-  async fetchPlatformConfiguration(
-    registrationRequest: RegistrationRequest,
-  ): Promise<OpenIDConfiguration> {
-    if (!this.dynamicRegistrationService) {
-      throw new Error('Dynamic registration service is not configured');
-    }
-    try {
-      return await this.dynamicRegistrationService.fetchPlatformConfiguration(
-        registrationRequest,
-      );
-    } catch (error) {
-      throw new Error(
-        `[Dynamic Registration] Platform configuration fetch failed: ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Initiates LTI 1.3 dynamic registration by fetching platform configuration and generating registration form.
-   * Creates a temporary session and returns vendor-specific HTML form for service selection.
-   *
-   * @param registrationRequest - Registration request containing openid_configuration URL and optional registration_token
-   * @param requestPath - Current request path used to build form action URLs
-   * @returns HTML form for service selection and registration completion
-   * @throws {Error} When dynamic registration service is not configured or platform configuration fails
-   */
-  async initiateDynamicRegistration(
-    registrationRequest: RegistrationRequest,
-    requestPath: string,
-  ): Promise<string> {
-    if (!this.dynamicRegistrationService) {
-      throw new Error('Dynamic registration service is not configured');
-    }
-    try {
-      return await this.dynamicRegistrationService.initiateDynamicRegistration(
-        registrationRequest,
-        requestPath,
-      );
-    } catch (error) {
-      throw new Error(`[Dynamic Registration] Initiation failed: ${formatError(error)}`);
-    }
-  }
-
-  /**
-   * Completes LTI 1.3 dynamic registration by processing form submission and storing client configuration.
-   * Validates session, registers with platform, stores client/deployment data, and returns success page.
-   *
-   * @param dynamicRegistrationForm - Validated form data containing selected services and session token
-   * @returns HTML success page with registration details and close button
-   * @throws {Error} When dynamic registration service is not configured or registration process fails
-   */
-  async completeDynamicRegistration(
-    dynamicRegistrationForm: DynamicRegistrationForm,
-  ): Promise<string> {
-    if (!this.dynamicRegistrationService) {
-      throw new Error('Dynamic registration service is not configured');
-    }
-
-    try {
-      return await this.dynamicRegistrationService.completeDynamicRegistration(
-        dynamicRegistrationForm,
-      );
-    } catch (error) {
-      throw new Error(`[Dynamic Registration] Completion failed: ${formatError(error)}`);
-    }
-  }
-
-  // Client management
-
-  /**
-   * Retrieves all configured LTI client platforms.
-   *
-   * @returns Array of client configurations (without deployment details)
-   */
-  async listClients(): Promise<Omit<LTIClient, 'deployments'>[]> {
-    try {
-      return await this.config.storage.listClients();
-    } catch (error) {
-      throw new Error(`[Client] Listing failed: ${formatError(error)}`);
-    }
-  }
-
-  /**
-   * Updates an existing client configuration.
-   *
-   * @param clientId - Unique client identifier
-   * @param client - Partial client object with fields to update
-   */
-  async updateClient(
-    clientId: string,
-    client: Partial<Omit<LTIClient, 'id' | 'deployments'>>,
-  ): Promise<void> {
-    try {
-      const validated = UpdateClientSchema.parse(client);
-      return await this.config.storage.updateClient(clientId, validated);
-    } catch (error) {
-      throw new Error(
-        `[Client] Update failed for ID '${clientId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Retrieves a specific client configuration by ID.
-   *
-   * @param clientId - Unique client identifier
-   * @returns Client configuration if found, undefined otherwise
-   */
-  async getClientById(clientId: string): Promise<LTIClient | undefined> {
-    try {
-      return await this.config.storage.getClientById(clientId);
-    } catch (error) {
-      throw new Error(
-        `[Client] Retrieval failed for ID '${clientId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Adds a new LTI client platform configuration.
-   *
-   * @param client - Client configuration (ID will be auto-generated)
-   * @returns The generated client ID
-   */
-  async addClient(client: Omit<LTIClient, 'id' | 'deployments'>): Promise<string> {
-    try {
-      const validated = AddClientSchema.parse(client);
-      return await this.config.storage.addClient(validated);
-    } catch (error) {
-      throw new Error(
-        `[Client] Creation failed for issuer '${client.iss}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Removes a client configuration and all its deployments.
-   *
-   * @param clientId - Unique client identifier
-   */
-  async deleteClient(clientId: string): Promise<void> {
-    try {
-      return await this.config.storage.deleteClient(clientId);
-    } catch (error) {
-      throw new Error(
-        `[Client] Deletion failed for ID '${clientId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  // Deployment management
-
-  /**
-   * Lists all deployments for a specific client platform.
-   *
-   * @param clientId - Client identifier
-   * @returns Array of deployment configurations for the client
-   */
-  async listDeployments(clientId: string): Promise<LTIDeployment[]> {
-    try {
-      return await this.config.storage.listDeployments(clientId);
-    } catch (error) {
-      throw new Error(
-        `[Deployment] Listing failed for client '${clientId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Retrieves a specific deployment configuration.
-   *
-   * @param clientId - Client identifier
-   * @param deploymentId - Deployment identifier
-   * @returns Deployment configuration if found, undefined otherwise
-   */
-  async getDeployment(
-    clientId: string,
-    deploymentId: string,
-  ): Promise<LTIDeployment | undefined> {
-    try {
-      return await this.config.storage.getDeployment(clientId, deploymentId);
-    } catch (error) {
-      throw new Error(
-        `[Deployment] Retrieval failed for client '${clientId}', deployment '${deploymentId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Adds a new deployment to an existing client.
-   *
-   * @param clientId - Client identifier
-   * @param deployment - Deployment configuration to add
-   * @returns The generated deployment ID
-   */
-  async addDeployment(
-    clientId: string,
-    deployment: Omit<LTIDeployment, 'id'>,
-  ): Promise<string> {
-    try {
-      return await this.config.storage.addDeployment(clientId, deployment);
-    } catch (error) {
-      throw new Error(
-        `[Deployment] Creation failed for client '${clientId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Updates an existing deployment configuration.
-   *
-   * @param clientId - Client identifier
-   * @param deploymentId - Deployment identifier
-   * @param deployment - Partial deployment object with fields to update
-   */
-  async updateDeployment(
-    clientId: string,
-    deploymentId: string,
-    deployment: Partial<LTIDeployment>,
-  ): Promise<void> {
-    try {
-      return await this.config.storage.updateDeployment(
-        clientId,
-        deploymentId,
-        deployment,
-      );
-    } catch (error) {
-      throw new Error(
-        `Deployment update failed for client '${clientId}' and deployment '${deploymentId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Removes a deployment from a client.
-   *
-   * @param clientId - Client identifier
-   * @param deploymentId - Deployment identifier to remove
-   */
-  async deleteDeployment(clientId: string, deploymentId: string): Promise<void> {
-    try {
-      return await this.config.storage.deleteDeployment(clientId, deploymentId);
-    } catch (error) {
-      throw new Error(
-        `[Deployment] Deletion failed for client '${clientId}', deployment '${deploymentId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  // Dynamic Registration Session Management
-
-  /**
-   * Stores a temporary registration session during LTI 1.3 dynamic registration flow.
-   * Sessions automatically expire after the configured TTL period.
-   *
-   * @param sessionId - Unique session identifier (typically a UUID)
-   * @param session - Registration session data including platform config and tokens
-   */
-  async setRegistrationSession(
-    sessionId: string,
-    session: LTIDynamicRegistrationSession,
-  ): Promise<void> {
-    try {
-      return await this.config.storage.setRegistrationSession(sessionId, session);
-    } catch (error) {
-      throw new Error(
-        `[Dynamic Registration] Session storage failed for ID '${sessionId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Retrieves a registration session by its ID for validation during completion.
-   * Returns undefined if the session is not found or has expired.
-   *
-   * @param sessionId - Unique session identifier
-   * @returns Registration session if found and not expired, undefined otherwise
-   */
-  async getRegistrationSession(
-    sessionId: string,
-  ): Promise<LTIDynamicRegistrationSession | undefined> {
-    try {
-      return await this.config.storage.getRegistrationSession(sessionId);
-    } catch (error) {
-      throw new Error(
-        `[Dynamic Registration] Session retrieval failed for ID '${sessionId}': ${formatError(error)}`,
-      );
-    }
-  }
-
-  /**
-   * Removes a registration session from storage after completion or expiration.
-   * Used for cleanup to prevent session accumulation.
-   *
-   * @param sessionId - Unique session identifier to delete
-   */
-  async deleteRegistrationSession(sessionId: string): Promise<void> {
-    try {
-      return await this.config.storage.deleteRegistrationSession(sessionId);
-    } catch (error) {
-      throw new Error(
-        `[Dynamic Registration] Session deletion failed for ID '${sessionId}': ${formatError(error)}`,
-      );
-    }
+  createAdvantage(session: LTISession): LtiAdvantage {
+    return new LtiAdvantage({
+      session,
+      tokenService: this.tokenService,
+      storage: this.config.storage,
+      keyPair: this.config.keyPair,
+      keyId: this.config.security?.keyId ?? 'main',
+      logger: this.logger,
+    });
   }
 }

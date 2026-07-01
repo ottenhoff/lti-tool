@@ -1,21 +1,28 @@
 import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import {
+  LTI_COLUMNS,
+  LTI_INDEXES,
+  LTI_TABLES,
+  LTI_UNIQUES,
+} from '#storage/schema-definitions';
+
 import { clientsTable } from './clients.schema.js';
 
 export const deploymentsTable = sqliteTable(
-  'lti_tool_deployments',
+  LTI_TABLES.deployments,
   {
-    id: text('id').primaryKey(),
-    clientId: text('client_id')
+    id: text(LTI_COLUMNS.id).primaryKey(),
+    clientId: text(LTI_COLUMNS.clientId)
       .notNull()
       .references(() => clientsTable.id, { onDelete: 'cascade' }),
-    deploymentId: text('deployment_id').notNull(),
-    name: text('name'),
-    description: text('description'),
+    deploymentId: text(LTI_COLUMNS.deploymentId).notNull(),
+    name: text(LTI_COLUMNS.deploymentName),
+    description: text(LTI_COLUMNS.deploymentDescription),
   },
   (table) => [
-    index('lti_tool_deployments_deployment_id_idx').on(table.deploymentId),
-    uniqueIndex('lti_tool_deployments_client_deployment_unique').on(
+    index(LTI_INDEXES.deploymentsDeploymentId).on(table.deploymentId),
+    uniqueIndex(LTI_UNIQUES.deploymentsClientDeployment).on(
       table.clientId,
       table.deploymentId,
     ),

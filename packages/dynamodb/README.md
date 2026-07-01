@@ -1,28 +1,28 @@
-# @lti-tool/dynamodb
+# @longsightgroup/lti-tool/storage/dynamodb
 
 <p align="center">Production-ready DynamoDB storage adapter for LTI 1.3. Includes caching and optimized for AWS Lambda.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@lti-tool/dynamodb"><img alt="npm" src="https://img.shields.io/npm/v/%40lti-tool%2Fdynamodb" /></a>
+  <a href="https://www.npmjs.com/package/@longsightgroup/lti-tool"><img alt="npm" src="https://img.shields.io/npm/v/%40longsightgroup%2Flti-tool" /></a>
 </p>
 
 ## Installation
 
 ```bash
-npm install @lti-tool/dynamodb
+npm install @longsightgroup/lti-tool @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
 ```
 
 ## Quick Start
 
 ```typescript
-import { LTITool } from '@lti-tool/core';
-import { DynamoDbStorage } from '@lti-tool/dynamodb';
+import { LTITool } from '@longsightgroup/lti-tool';
+import { DynamoDbStorage } from '@longsightgroup/lti-tool/storage/dynamodb';
 
 const storage = new DynamoDbStorage({
   controlPlaneTable: 'lti-tool-control',
   dataPlaneTable: 'lti-tool-data',
   launchConfigTable: 'lti-tool-launch-config',
-  logger: pino('dynamodb-storage'), // optional pino logger
+  logger, // optional structural logger
 });
 
 const ltiTool = new LTITool({
@@ -37,12 +37,9 @@ const ltiTool = new LTITool({
 - **Production Ready** - Handles high-scale LTI deployments
 - **Built-in Caching** - LRU cache for frequently accessed data
 - **Three-Table Design** - Optimized access patterns
+- **Standalone Architecture** - Unlike the SQL adapters, DynamoDB intentionally keeps a self-contained implementation rather than sharing `RelationalStorage`
 - **Auto-cleanup** - Expired nonces and sessions removed automatically
 - **AWS Optimized** - Works seamlessly with Lambda and IAM roles
-
-## API Reference
-
-- [API Reference](https://docs.lti-tool.dev/modules/_lti-tool_dynamodb.html) - Complete API documentation
 
 ## Configuration
 
@@ -70,6 +67,8 @@ Stores LMS client and deployment configurations.
 | `sk`      | String | `#` (client) or `D#<deployId>` |
 | `gsi1pk`  | String | `Type#Client` (for listing)    |
 | `gsi1sk`  | String | `#<clientId>`                  |
+| `gsi2pk`  | String | `C#<clientId>` (deployments)   |
+| `gsi2sk`  | String | `PD#<platformDeploymentId>`    |
 
 ### Data Plane Table (`lti-tool-data`)
 
@@ -156,10 +155,26 @@ resource "aws_dynamodb_table" "lti_control" {
     type = "S"
   }
 
+  attribute {
+    name = "gsi2pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "gsi2sk"
+    type = "S"
+  }
+
   global_secondary_index {
     name     = "GSI1"
     hash_key = "gsi1pk"
     range_key = "gsi1sk"
+  }
+
+  global_secondary_index {
+    name     = "GSI2"
+    hash_key = "gsi2pk"
+    range_key = "gsi2sk"
   }
 }
 

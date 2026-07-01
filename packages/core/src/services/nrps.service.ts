@@ -1,6 +1,10 @@
-import type { BaseLogger } from 'pino';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 
 import { LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY } from '../constants.js';
+import {
+  LtiServiceError,
+  summarizeLtiServiceResponseBody,
+} from '../errors/ltiServiceError.js';
 import type { LTISession } from '../interfaces/ltiSession.js';
 import type { LTIStorage } from '../interfaces/ltiStorage.js';
 import { getValidLaunchConfig } from '../utils/launchConfigValidation.js';
@@ -25,35 +29,35 @@ export class NRPSService {
   constructor(
     private tokenService: TokenService,
     private storage: LTIStorage,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
   ) {}
 
   /**
    * Retrieves all members (users) in the current course/context from the platform.
    * Returns raw response that should be parsed by the calling service.
    *
-   * @param session - Active LTI session containing NRPS service endpoints
+   * @param session - Active LTI session used for token lookup
+   * @param membershipUrl - Validated NRPS membership endpoint URL
    * @returns Promise resolving to the HTTP response containing membership data
-   * @throws {Error} When NRPS is not available for this session or request fails
+   * @throws {LtiServiceError} When token lookup, transport, or platform response fails
    *
    * @example
    * ```typescript
-   * const response = await nrpsService.getMembers(session);
+   * const response = await nrpsService.getMembers(
+   *   session,
+   *   'https://platform.example.com/nrps/members'
+   * );
    * const data = await response.json();
    * console.log('Course members:', data.members);
    * ```
    */
-  async getMembers(session: LTISession): Promise<Response> {
-    if (!session.services?.nrps?.membershipUrl) {
-      throw new Error('NRPS not available for this session');
-    }
-
+  async getMembers(session: LTISession, membershipUrl: string): Promise<Response> {
     const token = await this.getNRPSToken(
       session,
       LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY,
     );
 
-    const response = await ltiServiceFetch(session.services.nrps.membershipUrl, {
+    const response = await ltiServiceFetch(membershipUrl, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -85,12 +89,21 @@ export class NRPSService {
     operation: string,
   ): Promise<void> {
     if (!response.ok) {
-      const error = await response.json();
+      const responseBodySummary = await summarizeLtiServiceResponseBody(response);
       this.logger.error(
-        { error, status: response.status, statusText: response.statusText },
+        { responseBodySummary, status: response.status, statusText: response.statusText },
         `NRPS ${operation} failed`,
       );
-      throw new Error(`NRPS ${operation} failed: ${response.statusText} ${error}`);
+      throw new LtiServiceError({
+        code: 'platform_request_failed',
+        serviceKind: 'nrps',
+        operation,
+        message: `NRPS ${operation} failed: ${response.status} ${response.statusText}`,
+        endpointType: 'nrps',
+        status: response.status,
+        statusText: response.statusText,
+        responseBodySummary,
+      });
     }
   }
 }

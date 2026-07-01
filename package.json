@@ -1,36 +1,186 @@
 {
-  "name": "lti-tool",
+  "name": "@longsightgroup/lti-tool",
+  "version": "0.1.1",
+  "description": "LTI 1.3 implementation for Node.js with framework and storage adapters",
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "examples/*"
+  "author": "Longsight",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LongsightGroup/lti-tool.git"
+  },
+  "homepage": "https://github.com/LongsightGroup/lti-tool#readme",
+  "bugs": {
+    "url": "https://github.com/LongsightGroup/lti-tool/issues"
+  },
+  "main": "./dist/packages/core/src/index.js",
+  "types": "./dist/packages/core/src/index.d.ts",
+  "files": [
+    "dist",
+    "packages/d1/drizzle",
+    "packages/mysql/drizzle",
+    "packages/postgresql/drizzle",
+    "packages/d1/drizzle.config.ts",
+    "packages/mysql/drizzle.config.ts",
+    "packages/postgresql/drizzle.config.ts",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
+  "exports": {
+    ".": {
+      "source": "./packages/core/src/index.ts",
+      "types": "./dist/packages/core/src/index.d.ts",
+      "import": "./dist/packages/core/src/index.js"
+    },
+    "./hono": {
+      "source": "./packages/hono/src/index.ts",
+      "types": "./dist/packages/hono/src/index.d.ts",
+      "import": "./dist/packages/hono/src/index.js"
+    },
+    "./storage/memory": {
+      "source": "./packages/memory/src/index.ts",
+      "types": "./dist/packages/memory/src/index.d.ts",
+      "import": "./dist/packages/memory/src/index.js"
+    },
+    "./storage/mysql": {
+      "source": "./packages/mysql/src/index.ts",
+      "types": "./dist/packages/mysql/src/index.d.ts",
+      "import": "./dist/packages/mysql/src/index.js"
+    },
+    "./storage/postgresql": {
+      "source": "./packages/postgresql/src/index.ts",
+      "types": "./dist/packages/postgresql/src/index.d.ts",
+      "import": "./dist/packages/postgresql/src/index.js"
+    },
+    "./storage/dynamodb": {
+      "source": "./packages/dynamodb/src/index.ts",
+      "types": "./dist/packages/dynamodb/src/index.d.ts",
+      "import": "./dist/packages/dynamodb/src/index.js"
+    },
+    "./storage/d1": {
+      "source": "./packages/d1/src/index.ts",
+      "types": "./dist/packages/d1/src/index.d.ts",
+      "import": "./dist/packages/d1/src/index.js"
+    },
+    "./testing": {
+      "source": "./packages/test-harness/src/index.ts",
+      "types": "./dist/packages/test-harness/src/index.d.ts",
+      "import": "./dist/packages/test-harness/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "imports": {
+    "#test-harness/*": {
+      "source": "./packages/test-harness/src/*.ts",
+      "types": "./packages/test-harness/src/*.ts",
+      "import": "./dist/packages/test-harness/src/*.js"
+    },
+    "#storage/relational-storage": {
+      "source": "./packages/storage-relational/src/relationalStorage.ts",
+      "types": "./packages/storage-relational/src/relationalStorage.ts",
+      "import": "./dist/packages/storage-relational/src/relationalStorage.js"
+    },
+    "#storage/schema-definitions": {
+      "source": "./packages/storage-relational/src/schemaDefinitions.ts",
+      "types": "./packages/storage-relational/src/schemaDefinitions.ts",
+      "import": "./dist/packages/storage-relational/src/schemaDefinitions.js"
+    },
+    "#storage/memory": {
+      "source": "./packages/memory/src/index.ts",
+      "types": "./packages/memory/src/index.ts",
+      "import": "./dist/packages/memory/src/index.js"
+    },
+    "#storage/mysql": {
+      "source": "./packages/mysql/src/index.ts",
+      "types": "./packages/mysql/src/index.ts",
+      "import": "./dist/packages/mysql/src/index.js"
+    },
+    "#storage/postgresql": {
+      "source": "./packages/postgresql/src/index.ts",
+      "types": "./packages/postgresql/src/index.ts",
+      "import": "./dist/packages/postgresql/src/index.js"
+    },
+    "#storage/d1": {
+      "source": "./packages/d1/src/index.ts",
+      "types": "./packages/d1/src/index.ts",
+      "import": "./dist/packages/d1/src/index.js"
+    }
+  },
   "scripts": {
-    "build": "npm run build --workspaces",
-    "docs:build": "typedoc",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node scripts/write-dist-package-json.mjs",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt --write .",
     "type-check": "tsc --noEmit",
     "smoke-test:dist": "node scripts/smoke-test-dist.mjs",
-    "test": "vitest --exclude=\"**/*.integration.test.ts\"",
-    "test:coverage": "vitest run --coverage --exclude=\"**/*.integration.test.ts\"",
-    "changeset": "changeset",
-    "changeset:version": "changeset version",
-    "changeset:publish": "changeset publish",
-    "release": "npm run build && changeset publish"
+    "test": "NODE_OPTIONS=\"--conditions=source\" vitest --exclude=\"**/*.integration.test.ts\"",
+    "test:coverage": "NODE_OPTIONS=\"--conditions=source\" vitest run --coverage --exclude=\"**/*.integration.test.ts\"",
+    "test:integration:core": "NODE_OPTIONS=\"--conditions=source\" vitest run packages/core/test/*.integration.test.ts",
+    "test:integration:mysql": "vitest run packages/mysql/test/*.integration.test.ts",
+    "test:integration:postgresql": "vitest run packages/postgresql/test/*.integration.test.ts",
+    "test:integration:d1": "vitest run packages/d1/test/*.integration.test.ts",
+    "db:generate:d1": "drizzle-kit generate --config packages/d1/drizzle.config.ts",
+    "db:generate:mysql": "drizzle-kit generate --config packages/mysql/drizzle.config.ts",
+    "db:generate:postgresql": "drizzle-kit generate --config packages/postgresql/drizzle.config.ts",
+    "db:check:d1": "drizzle-kit check --config packages/d1/drizzle.config.ts",
+    "db:check:mysql": "drizzle-kit check --config packages/mysql/drizzle.config.ts",
+    "db:check:postgresql": "drizzle-kit check --config packages/postgresql/drizzle.config.ts",
+    "db:check:migrations": "npm run db:check:d1 && npm run db:check:mysql && npm run db:check:postgresql",
+    "db:migrate:mysql": "drizzle-kit migrate --config packages/mysql/drizzle.config.ts",
+    "db:migrate:postgresql": "drizzle-kit migrate --config packages/postgresql/drizzle.config.ts",
+    "release": "npm run build && npm publish --provenance --access public"
+  },
+  "dependencies": {
+    "jose": "^6.2.3",
+    "lru-cache": "^11.5.1",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1076.0",
+    "@aws-sdk/util-dynamodb": "^3.996.5",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.27",
+    "mysql2": "^3.22.5",
+    "postgres": "^3.4.9"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-dynamodb": {
+      "optional": true
+    },
+    "@aws-sdk/util-dynamodb": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "postgres": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0",
-    "@types/node": "^25.9.3",
-    "@vitest/coverage-v8": "^4.1.8",
-    "oxfmt": "^0.54.0",
-    "oxlint": "^1.69.0",
-    "typedoc": "^0.28.19",
+    "@aws-sdk/client-dynamodb": "^3.1076.0",
+    "@aws-sdk/util-dynamodb": "^3.996.5",
+    "@types/node": "^25.9.4",
+    "@vitest/coverage-v8": "^4.1.9",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.27",
+    "miniflare": "^4.20260630.0",
+    "mysql2": "^3.22.5",
+    "oxfmt": "^0.57.0",
+    "oxlint": "^1.72.0",
+    "postgres": "^3.4.9",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "overrides": {
     "esbuild": "^0.28.1",

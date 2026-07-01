@@ -1,5 +1,35 @@
 // route exports
+export { createLtiRoutes, type CreateLtiRoutesOptions } from './createLtiRoutes.js';
+export {
+  createLtiOptionalRouteDeps,
+  type CreateLtiOptionalRouteDepsOptions,
+  type LtiOptionalRouteDeps,
+} from './createLtiOptionalRouteDeps.js';
+export type {
+  LtiCompleteDynamicRegistrationRouteDeps,
+  LtiDeepLinkRouteDeps,
+  LtiInitiateDynamicRegistrationRouteDeps,
+  LtiJwksRouteDeps,
+  LtiLaunchRouteDeps,
+  LtiLoginRouteDeps,
+  LtiSessionMiddlewareDeps,
+} from '../ltiRouteDeps.js';
 export { deepLinkRouteHandler } from './routes/deepLink.route.js';
+export {
+  defaultLaunchVerificationFailureResponse,
+  type LaunchVerificationFailureContext,
+  type LaunchVerificationFailureHandler,
+} from './launchFlow.js';
+export {
+  customLaunchRouteHandler,
+  type AuthorizedCustomLaunchRouteOptions,
+  type CustomDeepLinkingLaunchContext,
+  type CustomLaunchErrorContext,
+  type CustomLaunchResponse,
+  type CustomLaunchRouteOptions,
+  type CustomResourceLinkLaunchContext,
+  type CustomVerifiedLaunchContext,
+} from './routes/customLaunch.route.js';
 export {
   completeDynamicRegistrationRouteHandler,
   initiateDynamicRegistrationRouteHandler,
