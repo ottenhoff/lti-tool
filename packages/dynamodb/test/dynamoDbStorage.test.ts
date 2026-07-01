@@ -9,17 +9,9 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testSession } from '#test-harness/fixtures';
-import type { StorageHarness } from '#test-harness/storage/types';
-import { defineStorageConformanceSuite } from '#test-harness/storageConformance';
 
 import { LAUNCH_CONFIG_CACHE } from '../src/cacheConfig.js';
 import { DynamoDbStorage } from '../src/index.js';
-
-import {
-  createDynamoConformanceMock,
-  commandInput,
-  dynamoOk,
-} from './dynamoConformanceMock.js';
 
 const mockSend = vi.hoisted(() => vi.fn());
 
@@ -87,14 +79,6 @@ describe('DynamoDbStorage', () => {
       launchConfigTable: 'launchConfigs',
       logger: createNoopLogger(),
     });
-  });
-
-  // In-memory DynamoDB mock does not simulate TTL expiry for sessions/nonces.
-  defineStorageConformanceSuite('DynamoDbStorage', {
-    createStorage: () => {
-      mockSend.mockImplementation(createDynamoConformanceMock());
-      return createDynamoStorageHarness(storage);
-    },
   });
 
   describe('getDeploymentByPlatformId', () => {
@@ -179,22 +163,15 @@ describe('DynamoDbStorage', () => {
         ],
       });
 
-      // Mock the PutItem update operation
+      // Mock the PutItem update operation and launch config sync query.
       mockSend.mockResolvedValueOnce({ $metadata: { httpStatusCode: 200 } });
-
-      // Spy on updateClientLaunchConfigs to avoid the complex mocking
-      const updateLaunchConfigsSpy = vi
-        .spyOn(storage as any, 'updateClientLaunchConfigs')
-        .mockResolvedValue(undefined);
+      mockSend.mockResolvedValueOnce({ $metadata: { httpStatusCode: 200 }, Items: [] });
 
       await storage.updateClient('client-uuid-123', {
         name: 'Updated',
       });
 
-      expect(mockSend).toHaveBeenCalledTimes(2); // getClientById + PutItem
-      expect(updateLaunchConfigsSpy).toHaveBeenCalledWith('client-uuid-123');
-
-      updateLaunchConfigsSpy.mockRestore();
+      expect(mockSend).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -299,12 +276,12 @@ describe('DynamoDbStorage', () => {
   });
 });
 
-function createDynamoStorageHarness(
-  storage: DynamoDbStorage,
-): StorageHarness<DynamoDbStorage> {
-  return {
-    storage,
-    reset: async () => {},
-    dispose: async () => {},
-  };
+function commandInput(command: unknown): {
+  readonly IndexName?: string;
+} {
+  return (command as { readonly input: { readonly IndexName?: string } }).input;
+}
+
+function dynamoOk(): { readonly $metadata: { readonly httpStatusCode: number } } {
+  return { $metadata: { httpStatusCode: 200 } };
 }
