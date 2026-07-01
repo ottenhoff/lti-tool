@@ -30,7 +30,7 @@ export class PostgresStorageHarness implements StorageHarness<PostgresStorage> {
     const seedWriter = createPostgresSeedWriter(sql);
     return new PostgresStorageHarness(
       sql,
-      new PostgresStorage({ connectionUrl }),
+      new PostgresStorage({ connectionUrl, sql }),
       createRelationalReset(seedWriter),
     );
   }
@@ -56,7 +56,6 @@ export class PostgresStorageHarness implements StorageHarness<PostgresStorage> {
 
   async dispose(): Promise<void> {
     await this.storage.close();
-    await this.sql.end();
   }
 
   private createSeedWriter(): RelationalSeedWriter {

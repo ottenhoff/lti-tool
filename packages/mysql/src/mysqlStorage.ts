@@ -24,11 +24,13 @@ export class MySqlStorage extends RelationalStorage {
   constructor(config: MySqlStorageConfig) {
     const logger = resolveStorageLogger(config.logger);
     const connectionOptions = resolveConnectionOptions(config, logger);
-    const pool = mysql.createPool({
-      uri: config.connectionUrl,
-      connectionLimit: connectionOptions.connectionLimit,
-      queueLimit: connectionOptions.queueLimit,
-    });
+    const pool =
+      config.pool ??
+      mysql.createPool({
+        uri: config.connectionUrl,
+        connectionLimit: connectionOptions.connectionLimit,
+        queueLimit: connectionOptions.queueLimit,
+      });
     const db = drizzle(pool, { schema, mode: 'default' });
 
     super({

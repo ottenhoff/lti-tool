@@ -30,7 +30,7 @@ export class MySqlStorageHarness implements StorageHarness<MySqlStorage> {
     const seedWriter = createMySqlSeedWriter(pool);
     return new MySqlStorageHarness(
       pool,
-      new MySqlStorage({ connectionUrl }),
+      new MySqlStorage({ connectionUrl, pool }),
       createRelationalReset(seedWriter),
     );
   }
@@ -56,7 +56,6 @@ export class MySqlStorageHarness implements StorageHarness<MySqlStorage> {
 
   async dispose(): Promise<void> {
     await this.storage.close();
-    await this.pool.end();
   }
 
   private createSeedWriter(): RelationalSeedWriter {

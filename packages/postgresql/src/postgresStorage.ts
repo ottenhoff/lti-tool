@@ -24,10 +24,12 @@ export class PostgresStorage extends RelationalStorage {
   constructor(config: PostgresStorageConfig) {
     const logger = resolveStorageLogger(config.logger);
     const connectionOptions = resolveConnectionOptions(config, logger);
-    const sql = postgres(config.connectionUrl, {
-      max: connectionOptions.max,
-      idle_timeout: connectionOptions.idleTimeout,
-    });
+    const sql =
+      config.sql ??
+      postgres(config.connectionUrl, {
+        max: connectionOptions.max,
+        idle_timeout: connectionOptions.idleTimeout,
+      });
     const db = drizzle(sql, { schema });
 
     super({

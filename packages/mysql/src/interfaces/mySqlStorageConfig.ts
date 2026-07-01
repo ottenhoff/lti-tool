@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import type mysql from 'mysql2/promise';
 
 export interface MySqlStorageConfig {
   logger?: Logger;
@@ -7,6 +8,10 @@ export interface MySqlStorageConfig {
    * Compatible with DATABASE_URL environment variable used by most ORMs
    */
   connectionUrl: string;
+  /**
+   * Optional pre-created mysql2 pool (used by integration test harnesses).
+   */
+  pool?: mysql.Pool;
   /**
    * Optional mysql2 pool configuration
    */

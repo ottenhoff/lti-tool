@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import type postgres from 'postgres';
 
 export interface PostgresStorageConfig {
   logger?: Logger;
@@ -7,6 +8,10 @@ export interface PostgresStorageConfig {
    * Compatible with DATABASE_URL environment variable used by most ORMs
    */
   connectionUrl: string;
+  /**
+   * Optional pre-created postgres.js client (used by integration test harnesses).
+   */
+  sql?: postgres.Sql;
   /**
    * Optional postgres.js connection options
    */
