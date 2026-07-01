@@ -2,6 +2,8 @@ import type * as Jose from 'jose'; // import for the vi importActual usage
 import { createRemoteJWKSet, generateKeyPair, jwtVerify } from 'jose';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMockLTIPayload } from '#test-harness/fixtures';
+
 import {
   LTI_CLAIM_CONTEXT,
   LTI_CLAIM_DEPLOYMENT_ID,
@@ -20,8 +22,6 @@ import {
   type LtiVerifiedLaunch,
 } from '../src/index.js';
 import { LTITool } from '../src/ltiTool.js';
-
-import { createMockLTIPayload } from './helpers/fixtures.js';
 
 // Mock createRemoteJWKSet from jose to avoid actual HTTP calls
 vi.mock('jose', async () => {

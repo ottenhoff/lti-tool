@@ -1,16 +1,25 @@
 // oxlint-disable max-lines-per-function
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
+import { marshall } from '@aws-sdk/util-dynamodb';
 import {
-  type AttributeValue,
-  ConditionalCheckFailedException,
-} from '@aws-sdk/client-dynamodb';
-import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import type { LTIClient, LTISession } from '@longsightgroup/lti-tool';
-import type { BaseLogger } from 'pino';
+  createNoopLogger,
+  type LTIClient,
+  type LTISession,
+} from '@longsightgroup/lti-tool';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { defineStorageConformanceSuite } from '../../core/test/helpers/storageConformance.js';
+import { testSession } from '#test-harness/fixtures';
+import type { StorageHarness } from '#test-harness/storage/types';
+import { defineStorageConformanceSuite } from '#test-harness/storageConformance';
+
 import { LAUNCH_CONFIG_CACHE } from '../src/cacheConfig.js';
 import { DynamoDbStorage } from '../src/index.js';
+
+import {
+  createDynamoConformanceMock,
+  commandInput,
+  dynamoOk,
+} from './dynamoConformanceMock.js';
 
 const mockSend = vi.hoisted(() => vi.fn());
 
@@ -27,17 +36,6 @@ vi.mock('@aws-sdk/client-dynamodb', async (importOriginal) => {
   };
 });
 
-const mockLogger = {
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  silent: vi.fn(),
-  level: 'info',
-  msgPrefix: '',
-} as BaseLogger;
 const mockClient: LTIClient = {
   id: 'client-uuid-123',
   iss: 'https://platform.example.com',
@@ -63,26 +61,15 @@ const mockLaunchConfig = {
   jwksUrl: 'https://platform.example.com/.well-known/jwks',
 };
 
-const mockSession: LTISession = {
+const mockSession: LTISession = testSession({
   id: 'session123',
-  jwtPayload: {},
-  user: { id: 'user123', roles: [] },
-  context: { id: 'context123', label: 'TEST', title: 'Test' },
   platform: {
     issuer: 'https://platform.example.com',
     clientId: 'client123',
     deploymentId: 'deployment1',
     name: 'Test',
   },
-  launch: { target: 'https://tool.example.com/v1p3/debug' },
-  customParameters: {},
-  isAdmin: false,
-  isInstructor: false,
-  isStudent: false,
-  isAssignmentAndGradesAvailable: false,
-  isDeepLinkingAvailable: false,
-  isNameAndRolesAvailable: false,
-};
+});
 
 describe('DynamoDbStorage', () => {
   let storage: DynamoDbStorage;
@@ -98,15 +85,15 @@ describe('DynamoDbStorage', () => {
       controlPlaneTable: 'controlPlane',
       dataPlaneTable: 'dataPlane',
       launchConfigTable: 'launchConfigs',
-      // oxlint-disable no-explicit-anyq
-      logger: mockLogger as any,
+      logger: createNoopLogger(),
     });
   });
 
+  // In-memory DynamoDB mock does not simulate TTL expiry for sessions/nonces.
   defineStorageConformanceSuite('DynamoDbStorage', {
     createStorage: () => {
       mockSend.mockImplementation(createDynamoConformanceMock());
-      return storage;
+      return createDynamoStorageHarness(storage);
     },
   });
 
@@ -312,134 +299,12 @@ describe('DynamoDbStorage', () => {
   });
 });
 
-function createDynamoConformanceMock(): (command: unknown) => unknown {
-  const clients = new Map<string, Record<string, unknown>>();
-  const deployments = new Map<string, Map<string, Record<string, unknown>>>();
-  const nonces = new Set<string>();
-  const registrationSessions = new Map<string, Record<string, unknown>>();
-
-  return (command: unknown) => {
-    const input = commandInput(command);
-    const commandName = commandConstructorName(command);
-
-    if (input.Item !== undefined) {
-      const item = unmarshall(input.Item);
-      if (input.TableName === 'controlPlane' && item.type === 'Client') {
-        clients.set(String(item.id), item);
-        return dynamoOk();
-      }
-      if (input.TableName === 'controlPlane' && item.type === 'Deployment') {
-        const clientDeployments = deployments.get(String(item.pk)) ?? new Map();
-        clientDeployments.set(String(item.id), item);
-        deployments.set(String(item.pk), clientDeployments);
-        return dynamoOk();
-      }
-      if (input.TableName === 'dataPlane') {
-        const pk = String(item.pk ?? '');
-        if (pk.startsWith('DYNREG#')) {
-          registrationSessions.set(pk, item);
-          return dynamoOk();
-        }
-
-        const nonce = String(item.nonce);
-        if (nonces.has(nonce)) {
-          throw new ConditionalCheckFailedException({
-            message: 'The conditional request failed',
-            $metadata: {},
-          });
-        }
-        nonces.add(nonce);
-        return dynamoOk();
-      }
-      if (input.TableName === 'launchConfigs') return dynamoOk();
-    }
-
-    if (input.KeyConditionExpression !== undefined) {
-      if (input.TableName === 'controlPlane') {
-        if (input.IndexName === 'GSI2') {
-          const expressionValues = input.ExpressionAttributeValues ?? {};
-          const pk = attributeString(expressionValues[':gsi2pk']);
-          const gsi2sk = attributeString(expressionValues[':gsi2sk']);
-          const deployment = [...(deployments.get(pk)?.values() ?? [])].find(
-            (item) => item.gsi2sk === gsi2sk,
-          );
-
-          return {
-            ...dynamoOk(),
-            Items: deployment === undefined ? [] : [marshall(deployment)],
-          };
-        }
-
-        const expressionValues = input.ExpressionAttributeValues ?? {};
-        const pk = attributeString(expressionValues[':pk']);
-        const clientId = pk.replace(/^C#/, '');
-        const client = clients.get(clientId);
-        const clientDeployments = [...(deployments.get(pk)?.values() ?? [])];
-        if (input.KeyConditionExpression?.includes('begins_with')) {
-          return {
-            ...dynamoOk(),
-            Items: clientDeployments.map((item) => marshall(item)),
-          };
-        }
-        const items = client === undefined ? [] : [client, ...clientDeployments];
-        return { ...dynamoOk(), Items: items.map((item) => marshall(item)) };
-      }
-      if (input.TableName === 'launchConfigs') return { ...dynamoOk(), Items: [] };
-    }
-
-    if (input.Key !== undefined && commandName === 'GetItemCommand') {
-      const key = unmarshall(input.Key);
-      if (input.TableName === 'controlPlane') {
-        const deployment = deployments
-          .get(String(key.pk))
-          ?.get(String(key.sk).replace(/^D#/, ''));
-        return deployment === undefined
-          ? dynamoOk()
-          : { ...dynamoOk(), Item: marshall(deployment) };
-      }
-      if (input.TableName === 'dataPlane') {
-        const session = registrationSessions.get(String(key.pk));
-        return session === undefined
-          ? dynamoOk()
-          : { ...dynamoOk(), Item: marshall(session) };
-      }
-      if (input.TableName === 'launchConfigs') return dynamoOk();
-    }
-
-    if (input.Key !== undefined && commandName === 'DeleteItemCommand') {
-      const key = unmarshall(input.Key);
-      if (input.TableName === 'controlPlane') {
-        deployments.get(String(key.pk))?.delete(String(key.sk).replace(/^D#/, ''));
-      }
-      return dynamoOk();
-    }
-
-    return dynamoOk();
+function createDynamoStorageHarness(
+  storage: DynamoDbStorage,
+): StorageHarness<DynamoDbStorage> {
+  return {
+    storage,
+    reset: async () => {},
+    dispose: async () => {},
   };
-}
-
-type DynamoCommandInput = {
-  readonly TableName?: string;
-  readonly Item?: Record<string, AttributeValue>;
-  readonly Key?: Record<string, AttributeValue>;
-  readonly ExpressionAttributeValues?: Record<string, AttributeValue>;
-  readonly KeyConditionExpression?: string;
-  readonly IndexName?: string;
-};
-
-function commandInput(command: unknown): DynamoCommandInput {
-  return (command as { readonly input: DynamoCommandInput }).input;
-}
-
-function commandConstructorName(command: unknown): string {
-  return (command as { readonly constructor: { readonly name: string } }).constructor
-    .name;
-}
-
-function attributeString(attribute: unknown): string {
-  return String((attribute as { readonly S?: string }).S);
-}
-
-function dynamoOk(): { readonly $metadata: { readonly httpStatusCode: number } } {
-  return { $metadata: { httpStatusCode: 200 } };
 }

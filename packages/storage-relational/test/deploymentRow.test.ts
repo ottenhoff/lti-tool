@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMockLTIPayload } from '../../core/test/helpers/fixtures.js';
+import { createMockLTIPayload } from '#test-harness/fixtures';
+
 import {
   mapDeploymentRow,
   toDeploymentInsertRow,

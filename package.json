@@ -65,6 +65,11 @@
     "./package.json": "./package.json"
   },
   "imports": {
+    "#test-harness/*": {
+      "source": "./packages/test-harness/src/*.ts",
+      "types": "./packages/test-harness/src/*.ts",
+      "import": "./dist/packages/test-harness/src/*.js"
+    },
     "#storage/relational-storage": {
       "source": "./packages/storage-relational/src/relationalStorage.ts",
       "types": "./packages/storage-relational/src/relationalStorage.ts",
@@ -74,6 +79,26 @@
       "source": "./packages/storage-relational/src/schemaDefinitions.ts",
       "types": "./packages/storage-relational/src/schemaDefinitions.ts",
       "import": "./dist/packages/storage-relational/src/schemaDefinitions.js"
+    },
+    "#storage/memory": {
+      "source": "./packages/memory/src/index.ts",
+      "types": "./packages/memory/src/index.ts",
+      "import": "./dist/packages/memory/src/index.js"
+    },
+    "#storage/mysql": {
+      "source": "./packages/mysql/src/index.ts",
+      "types": "./packages/mysql/src/index.ts",
+      "import": "./dist/packages/mysql/src/index.js"
+    },
+    "#storage/postgresql": {
+      "source": "./packages/postgresql/src/index.ts",
+      "types": "./packages/postgresql/src/index.ts",
+      "import": "./dist/packages/postgresql/src/index.js"
+    },
+    "#storage/d1": {
+      "source": "./packages/d1/src/index.ts",
+      "types": "./packages/d1/src/index.ts",
+      "import": "./dist/packages/d1/src/index.js"
     }
   },
   "scripts": {

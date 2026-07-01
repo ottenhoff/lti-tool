@@ -10,6 +10,7 @@ type PackageImportTarget =
     };
 
 type PackageJson = {
+  readonly exports?: Record<string, PackageImportTarget>;
   readonly imports?: Record<string, PackageImportTarget>;
 };
 
@@ -19,8 +20,9 @@ const packageJson = JSON.parse(
 
 function sourceAliases(): Record<string, string> {
   return {
-    '@longsightgroup/lti-tool': fileURLToPath(
-      new URL('./packages/core/src/index.ts', import.meta.url),
+    ...packageExportAliases(),
+    '#test-harness/': fileURLToPath(
+      new URL('./packages/test-harness/src/', import.meta.url),
     ),
     ...Object.fromEntries(
       Object.entries(packageJson.imports ?? {}).flatMap(([specifier, target]) => {
@@ -30,6 +32,22 @@ function sourceAliases(): Record<string, string> {
       }),
     ),
   };
+}
+
+function packageExportAliases(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(packageJson.exports ?? {}).flatMap(([specifier, target]) => {
+      if (specifier === './package.json') return [];
+      if (typeof target === 'string' || target.source === undefined) return [];
+
+      const alias =
+        specifier === '.'
+          ? '@longsightgroup/lti-tool'
+          : `@longsightgroup/lti-tool/${specifier.replace(/^\.\//, '')}`;
+
+      return [[alias, fileURLToPath(new URL(target.source, import.meta.url))]];
+    }),
+  );
 }
 
 export default defineConfig({
