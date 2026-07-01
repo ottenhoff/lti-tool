@@ -12,7 +12,7 @@ import {
   type LTISession,
 } from '@longsightgroup/lti-tool';
 import { type Context, type Handler } from 'hono';
-import type { Logger } from 'pino';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 import { ZodError } from 'zod';
 
 import { verifyLaunchRequest } from '../launchFlow.js';
@@ -59,7 +59,7 @@ export type CustomLaunchResponse = Response | Promise<Response>;
 
 type CustomLaunchRendererOptions<TLaunch extends LtiVerifiedLaunch> = {
   readonly ltiTool: LtiToolPort;
-  readonly logger: Logger;
+  readonly logger: LtiLogger;
   readonly onVerifiedLaunch?: (
     context: CustomVerifiedLaunchContext<TLaunch>,
   ) => void | Promise<void>;

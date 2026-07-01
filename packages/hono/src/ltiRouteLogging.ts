@@ -1,10 +1,10 @@
 import { createNoopLogger } from '@longsightgroup/lti-tool';
-import type { Logger } from 'pino';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 export type LtiRouteLoggerOptions = {
-  logger?: Logger;
+  logger?: LtiLogger;
 };
 
-export function createLtiRouteLogger(options?: LtiRouteLoggerOptions): Logger {
+export function createLtiRouteLogger(options?: LtiRouteLoggerOptions): LtiLogger {
   return options?.logger ?? createNoopLogger();
 }

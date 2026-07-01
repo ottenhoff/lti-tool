@@ -1,4 +1,4 @@
-import type { BaseLogger } from 'pino';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 
 import {
   LTI_CLAIM_TOOL_CONFIGURATION,
@@ -116,7 +116,7 @@ export class DynamicRegistrationService {
   constructor(
     private storage: LTIStorage,
     private dynamicRegistrationConfig: DynamicRegistrationConfig,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
   ) {}
 
   /**

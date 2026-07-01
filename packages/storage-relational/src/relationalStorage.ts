@@ -9,7 +9,7 @@ import {
   type LTIStorage,
 } from '@longsightgroup/lti-tool';
 import { and, eq, gt, type AnyColumn } from 'drizzle-orm';
-import type { Logger } from 'pino';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 import {
   mapDeploymentRow,
@@ -125,7 +125,7 @@ export type RelationalStorageDialect = {
 };
 
 export type RelationalStorageConfig = {
-  readonly logger: Logger;
+  readonly logger: LtiLogger;
   readonly db: RelationalDatabase;
   readonly schema: RelationalSchema;
   readonly dialect: RelationalStorageDialect;
@@ -135,7 +135,7 @@ export type RelationalStorageConfig = {
  * Shared LTI storage implementation for Drizzle-backed relational adapters.
  */
 export class RelationalStorage implements LTIStorage {
-  private readonly logger: Logger;
+  private readonly logger: LtiLogger;
   private readonly db: RelationalDatabase;
   private readonly schema: RelationalSchema;
   private readonly dialect: RelationalStorageDialect;
@@ -596,7 +596,7 @@ export class RelationalStorage implements LTIStorage {
   }
 }
 
-export function resolveStorageLogger(logger: Logger | undefined): Logger {
+export function resolveStorageLogger(logger: LtiLogger | undefined): LtiLogger {
   return logger ?? createNoopLogger();
 }
 

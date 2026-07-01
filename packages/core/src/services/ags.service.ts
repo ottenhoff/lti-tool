@@ -1,4 +1,4 @@
-import type { BaseLogger } from 'pino';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 
 import {
   LTI_AGS_SCOPE_LINEITEM,
@@ -62,7 +62,7 @@ export class AGSService {
   constructor(
     private tokenService: TokenService,
     private storage: LTIStorage,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
   ) {}
 
   /**

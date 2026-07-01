@@ -8,7 +8,7 @@ import {
   type LTISession,
   type LTIStorage,
 } from '@longsightgroup/lti-tool';
-import type { Logger } from 'pino';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 import type { MemoryStorageConfig } from './interfaces/memoryStorageConfig.js';
 
@@ -41,7 +41,7 @@ export class MemoryStorage implements LTIStorage {
   private sessions = new Map<string, LTISession>();
   private usedNonces = new Set<string>();
   private registrationSessions = new Map<string, LTIDynamicRegistrationSession>();
-  private logger: Logger;
+  private logger: LtiLogger;
 
   constructor(config?: MemoryStorageConfig) {
     this.logger = config?.logger ?? createNoopLogger();

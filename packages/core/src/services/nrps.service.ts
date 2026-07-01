@@ -1,4 +1,4 @@
-import type { BaseLogger } from 'pino';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 
 import { LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY } from '../constants.js';
 import {
@@ -29,7 +29,7 @@ export class NRPSService {
   constructor(
     private tokenService: TokenService,
     private storage: LTIStorage,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
   ) {}
 
   /**

@@ -22,7 +22,7 @@ import {
   type LTISession,
   type LTIStorage,
 } from '@longsightgroup/lti-tool';
-import type { Logger } from 'pino';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 import {
   LAUNCH_CONFIG_CACHE,
@@ -41,7 +41,7 @@ import type { DynamoLTIDeployment } from './interfaces/dynamoLTIDeployment.js';
  * Uses single-table design with different prefixes for different entity types.
  */
 export class DynamoDbStorage implements LTIStorage {
-  private logger: Logger;
+  private logger: LtiLogger;
   private controlPlaneTable: string;
   private dataPlaneTable: string;
   private launchConfigTable: string;

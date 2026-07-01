@@ -57,10 +57,13 @@ const storage = new MemoryStorage();
 ### With Logger
 
 ```typescript
-import pino from 'pino';
-
 const storage = new MemoryStorage({
-  logger: pino(),
+  logger: {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  },
 });
 ```
 

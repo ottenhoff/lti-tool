@@ -22,7 +22,7 @@ const storage = new DynamoDbStorage({
   controlPlaneTable: 'lti-tool-control',
   dataPlaneTable: 'lti-tool-data',
   launchConfigTable: 'lti-tool-launch-config',
-  logger: pino('dynamodb-storage'), // optional pino logger
+  logger, // optional structural logger
 });
 
 const ltiTool = new LTITool({

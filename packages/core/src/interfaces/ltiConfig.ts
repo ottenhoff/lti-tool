@@ -1,5 +1,4 @@
-import type { Logger } from 'pino';
-
+import type { LtiLogger } from './ltiLogger.js';
 import type { LTIStorage } from './ltiStorage.js';
 
 export interface CanvasDynamicRegistrationConfig {
@@ -60,8 +59,8 @@ export interface LTIConfig {
   /** Storage adapter for persisting platforms, sessions, and nonces */
   storage: LTIStorage;
 
-  /** Optional pino logger */
-  logger?: Logger;
+  /** Optional structured logger */
+  logger?: LtiLogger;
 
   /** Security configuration options */
   security?: {
