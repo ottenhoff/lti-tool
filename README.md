@@ -142,6 +142,7 @@ Everything installs as `@longsightgroup/lti-tool`. Import subpaths for adapters 
 | --------------------------------------------- | ------------------------------------------------------------ |
 | `@longsightgroup/lti-tool`                    | `LTITool`, schemas, launch verification, LTI service helpers |
 | `@longsightgroup/lti-tool/hono`               | Route handlers and session middleware                        |
+| `@longsightgroup/lti-tool/testing`            | Test builders and fake LTI Advantage clients                 |
 | `@longsightgroup/lti-tool/storage/memory`     | In-memory storage (dev/test)                                 |
 | `@longsightgroup/lti-tool/storage/dynamodb`   | DynamoDB (AWS Lambda, serverless)                            |
 | `@longsightgroup/lti-tool/storage/postgresql` | PostgreSQL via Drizzle                                       |
@@ -159,6 +160,25 @@ app.route('/lti', createLtiRoutes({ ltiTool }));
 ```
 
 This registers `/lti/jwks`, `/lti/login` (GET and POST), and `/lti/launch` (POST).
+
+For app-owned launch UI, use `customLaunchRouteHandler`. It performs form parsing,
+launch verification, session creation, and launch-message resolution, then calls your
+Resource Link or Deep Linking renderer with the verified launch, session, message, Hono
+context, and session-bound Advantage client.
+
+```typescript
+import { customLaunchRouteHandler } from '@longsightgroup/lti-tool/hono';
+
+app.post(
+  '/lti/launch',
+  customLaunchRouteHandler({
+    ltiTool,
+    logger,
+    renderResourceLink: ({ hono, session }) => hono.html(renderBadge(session)),
+    renderDeepLinkingRequest: ({ hono, message }) => hono.html(renderPicker(message)),
+  }),
+);
+```
 
 Mount deep linking or dynamic registration explicitly when you need them:
 
@@ -220,6 +240,14 @@ if (deepLink.success) {
 - **NRPS** — fetch course membership (`getMembers`)
 - **Deep linking** — return content items to the platform (`createDeepLinkingResponse`)
 
+For routes that need an HTTP response directly, call
+`createDeepLinkingHtmlResponse(contentItems)` for a typed `LtiServiceResult<Response>`
+with `text/html` and `no-store` headers.
+
+Applications and tests can depend on the exported small interfaces:
+`LtiToolPort`, `LtiAdvantagePort`, `LtiAgsClient`, `LtiNrpsClient`, and
+`LtiDeepLinkingClient`.
+
 Use `LtiDynamicRegistration` for administrator self-service registration.
 
 Service availability depends on what the platform enabled for the deployment. Helper functions like `isLtiAgsAvailable` and `isLtiNrpsAvailable` inspect the session claims.
@@ -264,6 +292,8 @@ For local development, expose your server with a tunnel (ngrok, Cloudflare Tunne
 
 - JWT signatures are verified against the platform JWKS.
 - OAuth `state` and `nonce` values are validated to prevent CSRF and replay attacks.
+  Nonces are atomically claimed by storage during launch verification; storage adapters
+  own nonce TTL configuration.
 - Client ID and deployment ID must match stored configuration.
 - Sessions are referenced by ID in the URL, not browser cookies — this works inside LMS iframes where third-party cookies are blocked.
 

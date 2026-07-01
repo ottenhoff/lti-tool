@@ -1,4 +1,4 @@
-import type { LtiDynamicRegistration, LTITool } from '@longsightgroup/lti-tool';
+import type { LtiDynamicRegistration, LtiToolPort } from '@longsightgroup/lti-tool';
 
 import type {
   LtiCompleteDynamicRegistrationRouteDeps,
@@ -8,7 +8,7 @@ import type {
 import { createLtiRouteLogger, type LtiRouteLoggerOptions } from '../ltiRouteLogging.js';
 
 export type CreateLtiOptionalRouteDepsOptions = LtiRouteLoggerOptions & {
-  ltiTool: LTITool;
+  ltiTool: Pick<LtiToolPort, 'getSession'>;
   dynamicRegistration: LtiDynamicRegistration;
 };
 

@@ -122,10 +122,14 @@ export interface LTIStorage {
   // Nonce validation (prevent replay attacks)
 
   /**
-   * Atomically validates a nonce and marks it as used to prevent replay attacks.
+   * Atomically claims a launch nonce during verification to prevent replay attacks.
    *
-   * @param nonce - Nonce value to validate
-   * @returns true if nonce is valid and unused, false if already used or expired
+   * Storage adapters own nonce TTL policy. The method returns true only when this
+   * verification is the first successful claim for the nonce and the adapter can store
+   * the claim until its configured expiration.
+   *
+   * @param nonce - Nonce value from the verified launch state and ID token
+   * @returns true if the nonce was claimed for the first time, false if already claimed or expired
    */
   validateNonce(nonce: string): Promise<boolean>;
 

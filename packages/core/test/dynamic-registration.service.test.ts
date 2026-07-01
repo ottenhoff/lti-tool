@@ -38,14 +38,14 @@ const createOpenIdConfiguration = ({
 
 const createStorageMock = () =>
   ({
-    listClients: vi.fn(),
+    listClients: vi.fn().mockResolvedValue([]),
     getClientById: vi.fn(),
-    addClient: vi.fn(),
+    addClient: vi.fn().mockResolvedValue('client-record-id'),
     updateClient: vi.fn(),
     deleteClient: vi.fn(),
-    listDeployments: vi.fn(),
-    getDeploymentByPlatformId: vi.fn(),
-    addDeployment: vi.fn(),
+    listDeployments: vi.fn().mockResolvedValue([]),
+    getDeploymentByPlatformId: vi.fn().mockResolvedValue(undefined),
+    addDeployment: vi.fn().mockResolvedValue('deployment-record-id'),
     updateDeploymentById: vi.fn(),
     deleteDeploymentById: vi.fn(),
     getSession: vi.fn(),

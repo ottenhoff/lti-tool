@@ -6,6 +6,7 @@ const packages = [
   '@longsightgroup/lti-tool/storage/postgresql',
   '@longsightgroup/lti-tool/storage/dynamodb',
   '@longsightgroup/lti-tool/storage/d1',
+  '@longsightgroup/lti-tool/testing',
 ];
 
 for (const packageName of packages) {

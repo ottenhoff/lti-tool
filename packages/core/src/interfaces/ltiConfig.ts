@@ -69,8 +69,6 @@ export interface LTIConfig {
     keyId?: string;
     /** State JWT expiration time in seconds (defaults to 600 = 10 minutes) */
     stateExpirationSeconds?: number;
-    /** Nonce expiration time in seconds (defaults to 600 = 10 minutes) */
-    nonceExpirationSeconds?: number;
     /**
      * Additional JWT audience values to trust when a launch ID Token includes
      * audiences besides this tool's client ID. Most tools should leave this unset.

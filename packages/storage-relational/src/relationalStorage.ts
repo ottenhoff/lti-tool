@@ -1,5 +1,6 @@
 import {
   createNoopLogger,
+  LtiStorageConflictError,
   type LTIClient,
   type LTIDeployment,
   type LTIDynamicRegistrationSession,
@@ -182,6 +183,19 @@ export class RelationalStorage implements LTIStorage {
 
   addClient(client: Omit<LTIClient, 'id' | 'deployments'>): Promise<string> {
     this.logger.info({ client }, 'adding client');
+
+    return this.insertUniqueClient(client);
+  }
+
+  private async insertUniqueClient(
+    client: Omit<LTIClient, 'id' | 'deployments'>,
+  ): Promise<string> {
+    if (await this.findClientIdByIssAndClientId(client.iss, client.clientId)) {
+      throw new LtiStorageConflictError({
+        operation: 'addClient',
+        message: `Client already exists for issuer ${client.iss} and client ID ${client.clientId}`,
+      });
+    }
 
     const clientId = crypto.randomUUID();
     return this.insertClient(clientId, client);
@@ -464,12 +478,30 @@ export class RelationalStorage implements LTIStorage {
 
   private async clientExists(clientId: string): Promise<boolean> {
     const [client] = await this.db
-      .select({ id: this.schema.clientsTable.id })
+      .select<{ id: string }>({ id: this.schema.clientsTable.id })
       .from(this.schema.clientsTable)
       .where(eq(this.schema.clientsTable.id, clientId))
       .limit(1);
 
     return client !== undefined;
+  }
+
+  private async findClientIdByIssAndClientId(
+    iss: string,
+    clientId: string,
+  ): Promise<string | undefined> {
+    const [client] = await this.db
+      .select<{ id: string }>({ id: this.schema.clientsTable.id })
+      .from(this.schema.clientsTable)
+      .where(
+        and(
+          eq(this.schema.clientsTable.iss, iss),
+          eq(this.schema.clientsTable.clientId, clientId),
+        ),
+      )
+      .limit(1);
+
+    return client?.id;
   }
 
   private async readLaunchConfigRow(

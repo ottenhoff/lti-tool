@@ -6,7 +6,6 @@ import {
   LTI_AGS_SCOPE_LINEITEM_READONLY,
   LTI_AGS_SCOPE_RESULT_READONLY,
   LTI_AGS_SCOPE_SCORE,
-  LtiDynamicRegistration,
   LTITool,
   type LTILaunchConfig,
   type LTIStorage,
@@ -14,8 +13,6 @@ import {
 } from '../src/index.js';
 import type { CreateLineItem } from '../src/schemas/lti13/ags/lineItem.schema.js';
 import type { ScoreSubmission } from '../src/schemas/lti13/ags/scoreSubmission.schema.js';
-import type { DynamicRegistrationForm } from '../src/schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
-import type { RegistrationRequest } from '../src/schemas/lti13/dynamicRegistration/registrationRequest.schema.js';
 
 const launchConfig: LTILaunchConfig = {
   iss: 'https://platform.example.com',
@@ -450,52 +447,33 @@ describe('LTI service results', () => {
     });
   });
 
-  it('returns structured failures when dynamic registration is not configured', async () => {
-    const registrationRequest: RegistrationRequest = {
-      openid_configuration:
-        'https://platform.example.com/.well-known/openid-configuration',
-    };
-    const registrationForm: DynamicRegistrationForm = {
-      sessionToken: 'session-token-123',
-    };
-
-    const dynamicRegistration = new LtiDynamicRegistration({
-      keyPair,
-      stateSecret: new TextEncoder().encode('test-state-secret-exactly32bytes'),
-      storage: createMockStorage(),
+  it('creates no-store html responses for deep linking returns', async () => {
+    const advantage = ltiTool.createAdvantage({
+      ...session,
+      services: {
+        ...session.services,
+        deepLinking: {
+          returnUrl: 'https://platform.example.com/deep-link-return',
+          acceptTypes: ['ltiResourceLink'],
+          acceptPresentationDocumentTargets: [],
+          acceptMultiple: false,
+          autoCreate: false,
+        },
+      },
     });
 
-    const fetchResult =
-      await dynamicRegistration.fetchPlatformConfiguration(registrationRequest);
-    const initiateResult = await dynamicRegistration.initiateDynamicRegistration(
-      registrationRequest,
-      '/lti/register',
-    );
-    const completeResult =
-      await dynamicRegistration.completeDynamicRegistration(registrationForm);
+    const result = await advantage.createDeepLinkingHtmlResponse([
+      {
+        type: 'ltiResourceLink',
+        title: 'Badge',
+        url: 'https://tool.example.com/badges/1',
+      },
+    ]);
 
-    expect(fetchResult.success).toBe(false);
-    if (fetchResult.success) throw new Error('Expected service failure');
-    expect(fetchResult.error).toMatchObject({
-      code: 'service_not_available',
-      serviceKind: 'dynamic_registration',
-      operation: 'fetchPlatformConfiguration',
-    });
-
-    expect(initiateResult.success).toBe(false);
-    if (initiateResult.success) throw new Error('Expected service failure');
-    expect(initiateResult.error).toMatchObject({
-      code: 'service_not_available',
-      serviceKind: 'dynamic_registration',
-      operation: 'initiateDynamicRegistration',
-    });
-
-    expect(completeResult.success).toBe(false);
-    if (completeResult.success) throw new Error('Expected service failure');
-    expect(completeResult.error).toMatchObject({
-      code: 'service_not_available',
-      serviceKind: 'dynamic_registration',
-      operation: 'completeDynamicRegistration',
-    });
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('Expected deep linking response');
+    expect(result.data.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(result.data.headers.get('cache-control')).toBe('no-store');
+    expect(await result.data.text()).toContain('deepLinkingForm');
   });
 });

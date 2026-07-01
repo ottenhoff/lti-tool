@@ -1,5 +1,8 @@
 {
   "extends": "./tsconfig.json",
   "include": ["packages/*/src/**/*"],
-  "exclude": ["packages/test-harness/**/*"]
+  "exclude": [
+    "packages/test-harness/src/storage/**/*",
+    "packages/test-harness/src/storageConformance.ts"
+  ]
 }

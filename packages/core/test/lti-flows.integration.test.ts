@@ -86,7 +86,6 @@ describe('LTI Integration Tests', () => {
       security: {
         keyId: 'test-key',
         stateExpirationSeconds: 300,
-        nonceExpirationSeconds: 300,
       },
     };
 
@@ -364,7 +363,6 @@ describe('LTI Integration Tests', () => {
         security: {
           keyId: 'test-key',
           stateExpirationSeconds: 300,
-          nonceExpirationSeconds: 300,
           trustedAudiences: ['other-client'],
         },
       });
@@ -543,7 +541,6 @@ describe('LTI Integration Tests', () => {
         security: {
           keyId: 'test-key',
           stateExpirationSeconds: 300,
-          nonceExpirationSeconds: 300,
           trustedAudiences: ['other-client'],
         },
       });
@@ -790,7 +787,6 @@ describe('LTI Integration Tests', () => {
         security: {
           keyId: 'test-key',
           stateExpirationSeconds: 300,
-          nonceExpirationSeconds: 300,
           trustedAudiences: ['other-client'],
         },
       });

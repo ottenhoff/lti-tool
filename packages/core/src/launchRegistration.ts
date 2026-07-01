@@ -1,8 +1,12 @@
+import { LTI_CLAIM_TOOL_CONFIGURATION } from './constants.js';
+import { LtiStorageConflictError } from './errors/ltiStorageError.js';
 import type { LTIClient } from './interfaces/ltiClient.js';
 import type { LTIDeployment } from './interfaces/ltiDeployment.js';
+import type { LTIDynamicRegistrationSession } from './interfaces/ltiDynamicRegistrationSession.js';
 import type { LTILaunchConfig } from './interfaces/ltiLaunchConfig.js';
 import type { LTIStorage } from './interfaces/ltiStorage.js';
 import { AddClientSchema } from './schemas/client.schema.js';
+import type { RegistrationResponse } from './schemas/lti13/dynamicRegistration/registrationResponse.schema.js';
 
 export interface LtiLaunchRegistrationInput {
   /** Platform issuer URL that uniquely identifies the LMS */
@@ -54,10 +58,20 @@ const findLaunchRegistrationClient = async (
   registration: LtiLaunchRegistrationInput,
 ): Promise<StoredClient | undefined> => {
   const clients = await storage.listClients();
-  return clients.find(
+  const matches = clients.filter(
     (client) =>
       client.iss === registration.iss && client.clientId === registration.clientId,
   );
+
+  if (matches.length > 1) {
+    throw new LtiStorageConflictError({
+      operation: 'upsertLaunchRegistration',
+      message:
+        'Multiple stored clients match the same issuer and client ID for launch registration',
+    });
+  }
+
+  return matches[0];
 };
 
 const upsertLaunchRegistrationClient = async (
@@ -137,6 +151,30 @@ const launchConfigFromRegistration = (
   tokenUrl: registration.tokenUrl,
   jwksUrl: registration.jwksUrl,
 });
+
+/**
+ * Projects a completed dynamic-registration response into the canonical launch
+ * registration input used by application admin flows and dynamic registration.
+ */
+export function projectDynamicRegistrationLaunchRegistration(input: {
+  session: LTIDynamicRegistrationSession;
+  registrationResponse: RegistrationResponse;
+}): LtiLaunchRegistrationInput {
+  const toolConfiguration = input.registrationResponse[LTI_CLAIM_TOOL_CONFIGURATION];
+
+  return {
+    iss: input.session.openIdConfiguration.issuer,
+    clientId: input.registrationResponse.client_id,
+    deploymentId: toolConfiguration.deployment_id ?? 'default',
+    authUrl: input.session.openIdConfiguration.authorization_endpoint,
+    tokenUrl: input.session.openIdConfiguration.token_endpoint,
+    jwksUrl: input.session.openIdConfiguration.jwks_uri,
+    name: input.registrationResponse.client_name,
+    deploymentName: toolConfiguration.deployment_id
+      ? 'Default Deployment via dynamic registration provided deployment id'
+      : 'Default Deployment (Canvas-style)',
+  };
+}
 
 /**
  * Registers or updates launch records from LMS administrator values.

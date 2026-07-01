@@ -168,6 +168,37 @@ const runAgsEmptyOperation = (
 /**
  * Session-bound LTI Advantage facade for AGS, NRPS, and Deep Linking.
  */
+export interface LtiAgsClient {
+  submitScore: LtiAdvantage['submitScore'];
+  getScores: LtiAdvantage['getScores'];
+  listLineItems: LtiAdvantage['listLineItems'];
+  getLineItem: LtiAdvantage['getLineItem'];
+  createLineItem: LtiAdvantage['createLineItem'];
+  updateLineItem: LtiAdvantage['updateLineItem'];
+  deleteLineItem: LtiAdvantage['deleteLineItem'];
+}
+
+/**
+ * Session-bound Names and Role Provisioning Services client.
+ */
+export interface LtiNrpsClient {
+  getMembers: LtiAdvantage['getMembers'];
+}
+
+/**
+ * Session-bound Deep Linking client.
+ */
+export interface LtiDeepLinkingClient {
+  createDeepLinkingResponse: LtiAdvantage['createDeepLinkingResponse'];
+  createDeepLinkingHtmlResponse: LtiAdvantage['createDeepLinkingHtmlResponse'];
+}
+
+/**
+ * Complete session-bound LTI Advantage facade.
+ */
+export interface LtiAdvantagePort
+  extends LtiAgsClient, LtiNrpsClient, LtiDeepLinkingClient {}
+
 export class LtiAdvantage {
   private readonly session: LTISession;
   private readonly services: LtiAdvantageServices;
@@ -333,5 +364,25 @@ export class LtiAdvantage {
       execute: () =>
         this.services.deepLinkingService.createResponse(this.session, contentItems),
     });
+  }
+
+  /**
+   * Creates an HTML Response that auto-submits selected Deep Linking content items.
+   */
+  async createDeepLinkingHtmlResponse(
+    contentItems: DeepLinkingContentItem[],
+  ): Promise<LtiServiceResult<Response>> {
+    const result = await this.createDeepLinkingResponse(contentItems);
+    if (!result.success) return result;
+
+    return {
+      success: true,
+      data: new Response(result.data, {
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/html; charset=utf-8',
+        },
+      }),
+    };
   }
 }

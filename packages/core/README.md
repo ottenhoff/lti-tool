@@ -13,6 +13,7 @@
 - **Assignment and Grade Services (AGS)** - Score submission to LMS
 - **Session Management** - Secure session creation and retrieval
 - **Platform registration** - One-call launch registration via `upsertLaunchRegistration`
+- **Small app ports** - `LtiToolPort`, `LtiAdvantagePort`, and service-specific client interfaces for app modules and tests
 
 ## Installation
 
@@ -52,6 +53,19 @@ if (result.success) {
 ```
 
 Use `upsertLaunchRegistration` whenever an LMS administrator gives you issuer, client ID, deployment ID, and OIDC endpoints. For self-service registration, use `LtiDynamicRegistration`. Custom admin UIs that manage stored client or deployment records directly should call `LTIStorage` methods instead of `LTITool`.
+
+`LTIStorage.validateNonce` atomically claims nonces during launch verification. Configure
+nonce TTL on the storage adapter; core does not pre-store login nonces.
+
+For tests, import builders and fakes from `@longsightgroup/lti-tool/testing`:
+
+```typescript
+import {
+  createFakeLtiAdvantage,
+  testSession,
+  testVerifiedLaunch,
+} from '@longsightgroup/lti-tool/testing';
+```
 
 ## Persisted session JSON
 

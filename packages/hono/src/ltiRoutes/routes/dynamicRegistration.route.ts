@@ -31,7 +31,7 @@ export function initiateDynamicRegistrationRouteHandler(
           'lti dynamic registration initiation failed',
         );
         return c.json(
-          { error: 'Internal server error' },
+          { error: dynamicRegistrationErrorMessage(result.error) },
           dynamicRegistrationErrorStatus(result.error),
         );
       }
@@ -76,7 +76,7 @@ export function completeDynamicRegistrationRouteHandler(
           'lti dynamic registration completion failed',
         );
         return c.json(
-          { error: 'Internal server error' },
+          { error: dynamicRegistrationErrorMessage(result.error) },
           dynamicRegistrationErrorStatus(result.error),
         );
       }
@@ -94,11 +94,34 @@ export function completeDynamicRegistrationRouteHandler(
 
 function dynamicRegistrationErrorStatus(error: LtiServiceError): 400 | 500 {
   switch (error.code) {
+    case 'registration_session_expired':
+    case 'platform_registration_rejected':
+    case 'storage_conflict':
+      return 400;
     case 'service_not_available':
     case 'missing_required_scope':
     case 'token_request_failed':
     case 'platform_request_failed':
     case 'platform_response_invalid':
       return 500;
+  }
+}
+
+function dynamicRegistrationErrorMessage(error: LtiServiceError): string {
+  switch (error.code) {
+    case 'registration_session_expired':
+      return 'Registration session is invalid or expired';
+    case 'platform_registration_rejected':
+      return 'Platform rejected registration';
+    case 'storage_conflict':
+      return 'Registration conflicts with existing configuration';
+    case 'service_not_available':
+      return 'Dynamic registration is not available';
+    case 'missing_required_scope':
+      return 'Dynamic registration is missing a required scope';
+    case 'token_request_failed':
+    case 'platform_request_failed':
+    case 'platform_response_invalid':
+      return 'Internal server error';
   }
 }

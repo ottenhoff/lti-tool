@@ -141,4 +141,33 @@ describe('completeDynamicRegistrationRouteHandler', () => {
     expect(await response.json()).toEqual({ error: 'Internal server error' });
     expect(completeDynamicRegistrationMock).toHaveBeenCalledOnce();
   });
+
+  it('maps app-routable dynamic registration failures to bad requests', async () => {
+    completeDynamicRegistrationMock.mockResolvedValueOnce({
+      success: false,
+      error: new LtiServiceError({
+        code: 'registration_session_expired',
+        serviceKind: 'dynamic_registration',
+        operation: 'completeDynamicRegistration',
+        message: 'expired',
+      }),
+    });
+
+    const app = new Hono();
+    app.post('/lti/register/complete', completeDynamicRegistrationRouteHandler(deps));
+
+    const response = await app.request('/lti/register/complete', {
+      method: 'POST',
+      body: new URLSearchParams({ sessionToken: 'session-token-123' }).toString(),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Registration session is invalid or expired',
+    });
+    expect(completeDynamicRegistrationMock).toHaveBeenCalledOnce();
+  });
 });

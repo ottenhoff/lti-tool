@@ -65,9 +65,12 @@ export {
 } from './utils/ltiLaunchMessage.js';
 export {
   LtiLaunchVerificationError,
+  type LtiAuthorizedLaunch,
   type LtiLaunchVerificationErrorCode,
   type LtiLaunchVerificationResult,
   type LtiVerifiedLaunch,
+  type LtiVerifiedLaunchAuthorizationResult,
+  type LtiVerifyLaunchOptions,
 } from './utils/ltiLaunchVerification.js';
 export {
   LtiRequestParseError,
@@ -102,9 +105,17 @@ export {
 } from './utils/ltiSessionCodecs.js';
 export type { LtiDynamicRegistrationCompletionResult } from './services/dynamicRegistration.service.js';
 export { LTITool } from './ltiTool.js';
-export { LtiAdvantage, type LtiAdvantageInput } from './ltiAdvantage.js';
+export {
+  LtiAdvantage,
+  type LtiAdvantageInput,
+  type LtiAdvantagePort,
+  type LtiAgsClient,
+  type LtiDeepLinkingClient,
+  type LtiNrpsClient,
+} from './ltiAdvantage.js';
 export { LtiDynamicRegistration } from './ltiDynamicRegistration.js';
 export {
+  projectDynamicRegistrationLaunchRegistration,
   upsertLaunchRegistration,
   type LtiLaunchRegistrationInput,
   type LtiLaunchRegistrationUpsertResult,
@@ -112,9 +123,13 @@ export {
 
 export {
   formatLtiServiceError,
+  isLtiPlatformServiceErrorCode,
   LtiServiceError,
+  type LtiDynamicRegistrationServiceErrorCode,
+  type LtiPlatformServiceErrorCode,
   type LtiServiceErrorCode,
   type LtiServiceErrorInput,
   type LtiServiceKind,
   type LtiServiceResult,
 } from './errors/ltiServiceError.js';
+export { LtiStorageConflictError } from './errors/ltiStorageError.js';

@@ -16,6 +16,16 @@ export type {
 } from '../ltiRouteDeps.js';
 export { deepLinkRouteHandler } from './routes/deepLink.route.js';
 export {
+  customLaunchRouteHandler,
+  type AuthorizedCustomLaunchRouteOptions,
+  type CustomDeepLinkingLaunchContext,
+  type CustomLaunchErrorContext,
+  type CustomLaunchResponse,
+  type CustomLaunchRouteOptions,
+  type CustomResourceLinkLaunchContext,
+  type CustomVerifiedLaunchContext,
+} from './routes/customLaunch.route.js';
+export {
   completeDynamicRegistrationRouteHandler,
   initiateDynamicRegistrationRouteHandler,
 } from './routes/dynamicRegistration.route.js';

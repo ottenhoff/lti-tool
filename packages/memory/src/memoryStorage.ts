@@ -1,5 +1,6 @@
 import {
   createNoopLogger,
+  LtiStorageConflictError,
   type LTIClient,
   type LTIDeployment,
   type LTIDynamicRegistrationSession,
@@ -60,6 +61,14 @@ export class MemoryStorage implements LTIStorage {
 
   // oxlint-disable-next-line require-await
   async addClient(client: Omit<LTIClient, 'id' | 'deployments'>): Promise<string> {
+    const lookupKey = `${client.iss}#${client.clientId}`;
+    if (this.clientLookup.has(lookupKey)) {
+      throw new LtiStorageConflictError({
+        operation: 'addClient',
+        message: `Client already exists for issuer ${client.iss} and client ID ${client.clientId}`,
+      });
+    }
+
     const clientId = crypto.randomUUID();
     const clientWithId = { ...client, id: clientId, deployments: [] };
 

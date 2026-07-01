@@ -1,11 +1,21 @@
 import { formatError } from '../utils/errorFormatting.js';
 
-export type LtiServiceErrorCode =
+import { LtiStorageConflictError } from './ltiStorageError.js';
+
+export type LtiPlatformServiceErrorCode =
   | 'service_not_available'
   | 'missing_required_scope'
   | 'token_request_failed'
   | 'platform_request_failed'
   | 'platform_response_invalid';
+
+export type LtiDynamicRegistrationServiceErrorCode =
+  | LtiPlatformServiceErrorCode
+  | 'storage_conflict'
+  | 'registration_session_expired'
+  | 'platform_registration_rejected';
+
+export type LtiServiceErrorCode = LtiDynamicRegistrationServiceErrorCode;
 
 export type LtiServiceKind =
   | 'ags'
@@ -14,17 +24,25 @@ export type LtiServiceKind =
   | 'dynamic_registration'
   | 'deep_linking';
 
-export interface LtiServiceErrorInput {
-  code: LtiServiceErrorCode;
-  serviceKind: LtiServiceKind;
-  operation: string;
-  message: string;
-  cause?: unknown;
-  endpointType?: string;
-  status?: number;
-  statusText?: string;
-  responseBodySummary?: string;
-}
+export type LtiServiceErrorCodeForKind<TKind extends LtiServiceKind> =
+  TKind extends 'dynamic_registration'
+    ? LtiDynamicRegistrationServiceErrorCode
+    : LtiPlatformServiceErrorCode;
+
+export type LtiServiceErrorInput<TKind extends LtiServiceKind = LtiServiceKind> =
+  TKind extends LtiServiceKind
+    ? {
+        code: LtiServiceErrorCodeForKind<TKind>;
+        serviceKind: TKind;
+        operation: string;
+        message: string;
+        cause?: unknown;
+        endpointType?: string;
+        status?: number;
+        statusText?: string;
+        responseBodySummary?: string;
+      }
+    : never;
 
 export class LtiServiceError extends Error {
   public readonly code: LtiServiceErrorCode;
@@ -53,9 +71,9 @@ export class LtiServiceError extends Error {
   }
 }
 
-export type LtiServiceResult<T> =
+export type LtiServiceResult<T, TError extends LtiServiceError = LtiServiceError> =
   | { success: true; data: T; response?: Response }
-  | { success: false; error: LtiServiceError };
+  | { success: false; error: TError };
 
 type LtiServiceFailureResult = { success: false; error: LtiServiceError };
 type LtiPlatformServiceKind = Exclude<LtiServiceKind, 'token'>;
@@ -186,36 +204,126 @@ const ltiServiceFailure = (
   serviceKind: LtiPlatformServiceKind,
   operation: string,
 ): LtiServiceFailureResult => {
-  if (error instanceof LtiServiceError) {
-    return {
-      success: false,
-      error: new LtiServiceError({
-        code: error.code,
-        serviceKind,
-        operation,
-        message: error.message,
-        cause: error,
-        endpointType: error.endpointType,
-        status: error.status,
-        statusText: error.statusText,
-        responseBodySummary: error.responseBodySummary,
-      }),
-    };
+  if (error instanceof LtiStorageConflictError) {
+    return storageConflictFailure(error, serviceKind, operation);
   }
 
-  const message = formatError(error);
+  if (error instanceof LtiServiceError) {
+    if (error.serviceKind === serviceKind && error.operation === operation) {
+      return { success: false, error };
+    }
 
+    return rewrapLtiServiceError(error, serviceKind, operation);
+  }
+
+  return unknownLtiServiceFailure(error, serviceKind, operation);
+};
+
+const storageConflictFailure = (
+  error: LtiStorageConflictError,
+  serviceKind: LtiPlatformServiceKind,
+  operation: string,
+): LtiServiceFailureResult => {
+  if (serviceKind !== 'dynamic_registration') {
+    return unknownLtiServiceFailure(error, serviceKind, operation);
+  }
+
+  return {
+    success: false,
+    error: new LtiServiceError({
+      code: 'storage_conflict',
+      serviceKind,
+      operation,
+      message: error.message,
+      cause: error,
+    }),
+  };
+};
+
+const rewrapLtiServiceError = (
+  error: LtiServiceError,
+  serviceKind: LtiPlatformServiceKind,
+  operation: string,
+): LtiServiceFailureResult => {
+  if (serviceKind === 'dynamic_registration') {
+    return rewrapDynamicRegistrationServiceError(error, operation);
+  }
+
+  return rewrapPlatformServiceError(error, serviceKind, operation);
+};
+
+const rewrapDynamicRegistrationServiceError = (
+  error: LtiServiceError,
+  operation: string,
+): LtiServiceFailureResult => ({
+  success: false,
+  error: new LtiServiceError({
+    code: error.code,
+    serviceKind: 'dynamic_registration',
+    operation,
+    message: error.message,
+    cause: error,
+    endpointType: error.endpointType,
+    status: error.status,
+    statusText: error.statusText,
+    responseBodySummary: error.responseBodySummary,
+  }),
+});
+
+const rewrapPlatformServiceError = (
+  error: LtiServiceError,
+  serviceKind: Exclude<LtiPlatformServiceKind, 'dynamic_registration'>,
+  operation: string,
+): LtiServiceFailureResult => ({
+  success: false,
+  error: new LtiServiceError({
+    code: isLtiPlatformServiceErrorCode(error.code)
+      ? error.code
+      : 'platform_request_failed',
+    serviceKind,
+    operation,
+    message: error.message,
+    cause: error,
+    endpointType: error.endpointType,
+    status: error.status,
+    statusText: error.statusText,
+    responseBodySummary: error.responseBodySummary,
+  }),
+});
+
+const unknownLtiServiceFailure = (
+  error: unknown,
+  serviceKind: LtiPlatformServiceKind,
+  operation: string,
+): LtiServiceFailureResult => {
   return {
     success: false,
     error: new LtiServiceError({
       code: 'platform_request_failed',
       serviceKind,
       operation,
-      message,
+      message: formatError(error),
       cause: error,
     }),
   };
 };
+
+export function isLtiPlatformServiceErrorCode(
+  code: LtiServiceErrorCode,
+): code is LtiPlatformServiceErrorCode {
+  switch (code) {
+    case 'service_not_available':
+    case 'missing_required_scope':
+    case 'token_request_failed':
+    case 'platform_request_failed':
+    case 'platform_response_invalid':
+      return true;
+    case 'storage_conflict':
+    case 'registration_session_expired':
+    case 'platform_registration_rejected':
+      return false;
+  }
+}
 
 const platformResponseInvalid = (
   serviceKind: LtiPlatformServiceKind,

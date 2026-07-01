@@ -1,0 +1,167 @@
+import {
+  createNoopLogger,
+  LTI_CLAIM_DEEP_LINKING_SETTINGS,
+  LTI_CLAIM_MESSAGE_TYPE,
+  LTI13JwtPayloadSchema,
+  LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+  LtiLaunchVerificationError,
+  type LtiAuthorizedLaunch,
+  type LtiLaunchVerificationResult,
+  type LtiToolPort,
+  type LtiVerifyLaunchOptions,
+  type LTISession,
+} from '@longsightgroup/lti-tool';
+import { Hono } from 'hono';
+import { describe, expect, it } from 'vitest';
+
+import { testSession } from '#test-harness/fixtures';
+import { createFakeLtiAdvantage, testVerifiedLaunch } from '#test-harness/testing';
+
+import {
+  customLaunchRouteHandler,
+  type CustomLaunchRouteOptions,
+} from '../src/ltiRoutes/routes/customLaunch.route.js';
+
+function launchRequestBody(): string {
+  return new URLSearchParams({
+    id_token:
+      'eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJodHRwczovL3BsYXRmb3JtLmV4YW1wbGUuY29tIn0.signature',
+    state: 'eyJhbGciOiJIUzI1NiJ9.eyJub25jZSI6InRlc3Qtbm9uY2UifQ.signature',
+  }).toString();
+}
+
+function createToolPort(session: LTISession): LtiToolPort {
+  const launch = testVerifiedLaunch();
+
+  function verifyLaunch(
+    _idToken: string,
+    _state: string,
+  ): Promise<LtiLaunchVerificationResult>;
+  function verifyLaunch<TAuthorization>(
+    _idToken: string,
+    _state: string,
+    options: LtiVerifyLaunchOptions<TAuthorization>,
+  ): Promise<LtiLaunchVerificationResult<LtiAuthorizedLaunch<TAuthorization>>>;
+  async function verifyLaunch<TAuthorization>(
+    _idToken: string,
+    _state: string,
+    options?: LtiVerifyLaunchOptions<TAuthorization>,
+  ): Promise<
+    | LtiLaunchVerificationResult
+    | LtiLaunchVerificationResult<LtiAuthorizedLaunch<TAuthorization>>
+  > {
+    if (!options?.authorizeVerifiedLaunch) {
+      return { success: true, launch };
+    }
+
+    const result = await options.authorizeVerifiedLaunch(launch);
+    if (!result.success) {
+      return {
+        success: false,
+        error: new LtiLaunchVerificationError(
+          'verified_launch_authorization_failed',
+          result.message ?? result.code,
+          result,
+        ),
+      };
+    }
+
+    return {
+      success: true,
+      launch: { ...launch, authorization: result.data },
+    };
+  }
+
+  return {
+    getJWKS: () => Promise.resolve({ keys: [] }),
+    handleLogin: () => Promise.resolve('https://platform.example.com/auth'),
+    verifyLaunch,
+    createSessionFromVerifiedLaunch: () => Promise.resolve(session),
+    getSession: () => Promise.resolve(session),
+    createAdvantage: () => createFakeLtiAdvantage(),
+  };
+}
+
+async function requestLaunch(
+  tool: LtiToolPort,
+  handlerOptions: Partial<CustomLaunchRouteOptions> = {},
+) {
+  const app = new Hono();
+  app.post(
+    '/lti/launch',
+    customLaunchRouteHandler({
+      ltiTool: tool,
+      logger: createNoopLogger(),
+      renderResourceLink: () => new Response('resource-link'),
+      renderDeepLinkingRequest: () => new Response('deep-linking'),
+      ...handlerOptions,
+    }),
+  );
+
+  return await app.request('/lti/launch', {
+    method: 'POST',
+    body: launchRequestBody(),
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  });
+}
+
+describe('customLaunchRouteHandler', () => {
+  it('renders resource link launches with verified launch context', async () => {
+    const seenSessionIds: string[] = [];
+    const session = testSession();
+    const response = await requestLaunch(createToolPort(session), {
+      renderResourceLink: ({ session: renderedSession }) => {
+        seenSessionIds.push(renderedSession.id);
+        return new Response(renderedSession.id);
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(session.id);
+    expect(seenSessionIds).toEqual([session.id]);
+  });
+
+  it('renders deep linking launches with deep linking settings', async () => {
+    const baseSession = testSession();
+    const session = testSession({
+      jwtPayload: LTI13JwtPayloadSchema.parse({
+        ...baseSession.jwtPayload,
+        [LTI_CLAIM_MESSAGE_TYPE]: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+        [LTI_CLAIM_DEEP_LINKING_SETTINGS]: {
+          deep_link_return_url: 'https://platform.example.com/deep-link-return',
+          accept_types: ['ltiResourceLink'],
+        },
+      }),
+      services: {
+        deepLinking: {
+          returnUrl: 'https://platform.example.com/deep-link-return',
+          acceptTypes: ['ltiResourceLink'],
+          acceptPresentationDocumentTargets: [],
+          acceptMultiple: false,
+          autoCreate: false,
+        },
+      },
+      isDeepLinkingAvailable: true,
+    });
+
+    const response = await requestLaunch(createToolPort(session), {
+      renderDeepLinkingRequest: ({ message }) =>
+        new Response(message.deepLinkingSettings.returnUrl),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('https://platform.example.com/deep-link-return');
+  });
+
+  it('lets onError override default launch errors', async () => {
+    const response = await requestLaunch(createToolPort(testSession()), {
+      renderResourceLink: () => {
+        throw new Error('render failed');
+      },
+      onError: () => new Response('custom error', { status: 418 }),
+    });
+
+    expect(response.status).toBe(418);
+    expect(await response.text()).toBe('custom error');
+  });
+});

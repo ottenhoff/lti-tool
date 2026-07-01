@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { LtiStorageConflictError } from '../src/errors/ltiStorageError.js';
 import type {
   LTIClient,
   LTIDeployment,
@@ -153,6 +154,31 @@ class RecordingStorage implements LTIStorage {
   }
 }
 
+class ConflictingClientStorage extends RecordingStorage {
+  override listClients(): Promise<Omit<LTIClient, 'deployments'>[]> {
+    return Promise.resolve([
+      {
+        id: 'client-1',
+        name: 'Platform A',
+        iss: 'https://platform.example.com',
+        clientId: 'oauth-client-id',
+        authUrl: 'https://platform.example.com/auth',
+        tokenUrl: 'https://platform.example.com/token',
+        jwksUrl: 'https://platform.example.com/jwks',
+      },
+      {
+        id: 'client-2',
+        name: 'Platform B',
+        iss: 'https://platform.example.com',
+        clientId: 'oauth-client-id',
+        authUrl: 'https://platform.example.com/auth',
+        tokenUrl: 'https://platform.example.com/token',
+        jwksUrl: 'https://platform.example.com/jwks',
+      },
+    ]);
+  }
+}
+
 describe('launch registration upsert', () => {
   let storage: RecordingStorage;
 
@@ -261,5 +287,20 @@ describe('launch registration upsert', () => {
         deploymentId: 'platform-deployment-id',
       },
     });
+  });
+
+  it('rejects launch registration when multiple stored clients share issuer and client ID', async () => {
+    const conflictStorage = new ConflictingClientStorage();
+
+    await expect(
+      upsertLaunchRegistration(conflictStorage, {
+        iss: 'https://platform.example.com',
+        clientId: 'oauth-client-id',
+        deploymentId: 'platform-deployment-id',
+        authUrl: 'https://platform.example.com/auth',
+        tokenUrl: 'https://platform.example.com/token',
+        jwksUrl: 'https://platform.example.com/jwks',
+      }),
+    ).rejects.toBeInstanceOf(LtiStorageConflictError);
   });
 });

@@ -1,4 +1,4 @@
-import type { LTITool } from '@longsightgroup/lti-tool';
+import type { JWKS, LtiToolPort } from '@longsightgroup/lti-tool';
 import { Hono } from 'hono';
 
 import type {
@@ -13,7 +13,7 @@ import { launchRouteHandler } from './routes/launch.route.js';
 import { loginRouteHandler } from './routes/login.route.js';
 
 export type CreateLtiRoutesOptions = LtiRouteLoggerOptions & {
-  ltiTool: LTITool;
+  ltiTool: LtiToolPort & { getJWKS: () => Promise<JWKS> };
 };
 
 /**

@@ -1,21 +1,22 @@
 import type {
   DynamicRegistrationForm,
+  JWKS,
   LtiDynamicRegistration,
   LtiLaunchVerificationResult,
+  LtiToolPort,
   LtiVerifiedLaunch,
   LTISession,
-  LTITool,
   RegistrationRequest,
 } from '@longsightgroup/lti-tool';
 import type { Logger } from 'pino';
 
 export type LtiJwksRouteDeps = {
-  getJWKS: () => ReturnType<LTITool['getJWKS']>;
+  getJWKS: () => Promise<JWKS>;
   logger: Logger;
 };
 
 export type LtiLoginRouteDeps = {
-  handleLogin: LTITool['handleLogin'];
+  handleLogin: LtiToolPort['handleLogin'];
   logger: Logger;
 };
 

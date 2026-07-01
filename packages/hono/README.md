@@ -84,11 +84,36 @@ app.route('/lti', createLtiRoutes({ ltiTool, logger }));
 
 Mount deep linking and dynamic registration with their explicit route handlers when needed.
 
+### customLaunchRouteHandler(options)
+
+Use `customLaunchRouteHandler` when the app owns launch UI but wants the library to
+handle protocol parsing, verification, session creation, and launch-message routing.
+
+```typescript
+import { customLaunchRouteHandler } from '@longsightgroup/lti-tool/hono';
+
+app.post(
+  '/lti/launch',
+  customLaunchRouteHandler({
+    ltiTool,
+    logger,
+    authorizeLaunch: (launch) => ({ success: true, data: { tenantId: 'tenant-1' } }),
+    onVerifiedLaunch: ({ session }) => auditLaunch(session),
+    renderResourceLink: ({ session, advantage }) => renderBadgePage(session, advantage),
+    renderDeepLinkingRequest: ({ message }) => renderContentPicker(message),
+    onError: ({ hono }) => hono.json({ error: 'Launch failed' }, 400),
+  }),
+);
+```
+
+The render callbacks receive the Hono context, verified launch, stored session, resolved
+launch message, and session-bound Advantage client.
+
 ### createLtiOptionalRouteDeps(options)
 
 Binds dependency objects for optional routes from `LTITool` and `LtiDynamicRegistration` instances. Pass the same `logger` you use with `createLtiRoutes` when you want route-level error logging.
 
-Deep linking response creation is app-owned: call `ltiTool.createAdvantage(session).createDeepLinkingResponse(contentItems)` from your route handler.
+Deep linking response creation is app-owned: call `ltiTool.createAdvantage(session).createDeepLinkingResponse(contentItems)` from your route handler, or `createDeepLinkingHtmlResponse(contentItems)` when your route should return a ready-to-send HTML `Response`.
 
 ```typescript
 import { LtiDynamicRegistration } from '@longsightgroup/lti-tool';
