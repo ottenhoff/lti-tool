@@ -83,7 +83,6 @@ class DatabaseStorage implements LTIStorage {
 
 ## Documentation
 
-- [API Reference](https://docs.lti-tool.dev) - Complete API documentation
 - [Examples](https://github.com/lti-tool/lti-tool-examples) - (Coming soon) Working examples
 
 ## Security

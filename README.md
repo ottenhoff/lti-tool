@@ -269,9 +269,8 @@ For local development, expose your server with a tunnel (ngrok, Cloudflare Tunne
 
 Use a strong, random `stateSecret` (32+ bytes). Store your RSA private key in a secrets manager (AWS KMS, Parameter Store, Vault, etc.). Never commit keys or secrets to source control.
 
-## Documentation and API reference
+## Documentation
 
-- [API docs](https://docs.lti-tool.dev)
 - [Contributing](CONTRIBUTING.md)
 - [Issues](https://github.com/LongsightGroup/lti-tool/issues)
 - [Discussions](https://github.com/LongsightGroup/lti-tool/discussions)

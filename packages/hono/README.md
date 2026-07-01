@@ -70,9 +70,7 @@ app.get('/protected/content', (c) => {
 - **Error Handling** — Structured error responses
 - **Serverless Ready** — Optimized for AWS Lambda, Cloudflare Workers
 
-## API Reference
-
-- [API Reference](https://docs.lti-tool.dev/modules/_lti-tool_hono.html) - Complete API documentation
+## Reference
 
 ### createLtiRoutes(options)
 

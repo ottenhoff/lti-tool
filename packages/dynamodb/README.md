@@ -41,10 +41,6 @@ const ltiTool = new LTITool({
 - **Auto-cleanup** - Expired nonces and sessions removed automatically
 - **AWS Optimized** - Works seamlessly with Lambda and IAM roles
 
-## API Reference
-
-- [API Reference](https://docs.lti-tool.dev/modules/_lti-tool_dynamodb.html) - Complete API documentation
-
 ## Configuration
 
 ### Basic Setup

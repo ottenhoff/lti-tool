@@ -46,10 +46,6 @@ const ltiTool = new LTITool({
 - **Development Ready** - Perfect for local development
 - **Auto-cleanup** - Expired nonces and sessions removed automatically
 
-## API Reference
-
-- [API Reference](https://docs.lti-tool.dev/modules/_lti-tool_memory.html) - Complete API documentation
-
 ## Configuration
 
 ### Basic Usage

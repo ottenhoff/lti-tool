@@ -36,10 +36,6 @@ const ltiTool = new LTITool({
 - **Cascade Deletes** - Database constraints remove deployments with their client
 - **Tuned Connection Pool Defaults** - Connection pool defaults based on hosting environment
 
-## API Reference
-
-- [API Reference](https://docs.lti-tool.dev/modules/_lti-tool_mysql.html) - Complete API documentation
-
 ## Configuration
 
 ### Using Migrations
