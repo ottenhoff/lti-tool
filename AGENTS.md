@@ -57,7 +57,7 @@ packages/
 ```
 
 - **Core** must not import Hono, Drizzle, or cloud SDKs.
-- **Storage adapters** implement `LTIStorage` from core. Share behavior via conformance tests (`packages/core/test/helpers/storageConformance.ts`), not copy-paste.
+- **Storage adapters** implement `LTIStorage` from core. Share behavior via conformance tests (`packages/test-harness/src/storageConformance.ts`), not copy-paste. New adapters should add a `StorageHarness` in `packages/test-harness/src/storage/` and call `defineStorageConformanceSuite` from their adapter tests.
 - **Hono routes** are thin: parse request → call `LTITool` → map result to HTTP. No business logic in route files.
 - One package on npm (`@longsightgroup/lti-tool`) with subpath exports. Do not reintroduce per-package `package.json` files or duplicate public surfaces.
 
