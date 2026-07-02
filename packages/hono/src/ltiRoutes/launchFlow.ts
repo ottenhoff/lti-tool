@@ -1,5 +1,6 @@
 import {
   LTI13LaunchSchema,
+  type LtiLaunchVerificationError,
   type LtiLaunchVerificationErrorCode,
   type LtiLaunchVerificationResult,
   type LtiVerifiedLaunch,
@@ -25,6 +26,15 @@ export type LtiLaunchVerificationFlowResult<TLaunch extends LtiVerifiedLaunch> =
       readonly response: Response;
     };
 
+export type LtiLaunchVerificationFailureContext = {
+  readonly hono: Context;
+  readonly error: LtiLaunchVerificationError;
+};
+
+export type LtiLaunchVerificationFailureResponse = (
+  context: LtiLaunchVerificationFailureContext,
+) => Response | Promise<Response>;
+
 export type LtiLaunchFlowResult<TLaunch extends LtiVerifiedLaunch> =
   | {
       readonly success: true;
@@ -38,7 +48,9 @@ export type LtiLaunchFlowResult<TLaunch extends LtiVerifiedLaunch> =
 
 export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
   c: Context,
-  deps: Pick<LtiLaunchFlowDeps<TLaunch>, 'verifyLaunch'>,
+  deps: Pick<LtiLaunchFlowDeps<TLaunch>, 'verifyLaunch'> & {
+    readonly onVerificationFailure?: LtiLaunchVerificationFailureResponse;
+  },
 ): Promise<LtiLaunchVerificationFlowResult<TLaunch>> {
   const formData = await c.req.formData();
   const { id_token, state } = LTI13LaunchSchema.parse({
@@ -48,13 +60,22 @@ export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
 
   const verification = await deps.verifyLaunch(id_token, state);
   if (!verification.success) {
-    const status = launchVerificationErrorStatus(verification.error.code);
+    if (deps.onVerificationFailure) {
+      return {
+        success: false,
+        response: await deps.onVerificationFailure({
+          hono: c,
+          error: verification.error,
+        }),
+      };
+    }
+
     return {
       success: false,
-      response: c.json(
-        { error: status === 401 ? 'Authentication failed' : 'Internal server error' },
-        status,
-      ),
+      response: renderDefaultLaunchVerificationFailureResponse({
+        hono: c,
+        error: verification.error,
+      }),
     };
   }
 
@@ -105,4 +126,15 @@ function launchVerificationErrorStatus(code: LtiLaunchVerificationErrorCode): 40
     case 'verified_launch_authorization_failed':
       return 401;
   }
+}
+
+function launchVerificationErrorMessage(status: 401 | 500): string {
+  return status === 401 ? 'Authentication failed' : 'Internal server error';
+}
+
+export function renderDefaultLaunchVerificationFailureResponse(
+  context: LtiLaunchVerificationFailureContext,
+): Response {
+  const status = launchVerificationErrorStatus(context.error.code);
+  return context.hono.json({ error: launchVerificationErrorMessage(status) }, status);
 }

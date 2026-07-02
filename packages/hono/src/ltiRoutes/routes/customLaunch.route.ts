@@ -15,7 +15,10 @@ import {
 import { type Context, type Handler } from 'hono';
 import { ZodError } from 'zod';
 
-import { verifyLaunchRequest } from '../launchFlow.js';
+import {
+  verifyLaunchRequest,
+  type LtiLaunchVerificationFailureResponse,
+} from '../launchFlow.js';
 
 type CustomLaunchContext<TLaunch extends LtiVerifiedLaunch> = {
   readonly hono: Context;
@@ -63,6 +66,7 @@ type CustomLaunchRendererOptions<TLaunch extends LtiVerifiedLaunch> = {
   readonly onVerifiedLaunch?: (
     context: CustomVerifiedLaunchContext<TLaunch>,
   ) => void | Promise<void>;
+  readonly onVerificationFailure?: LtiLaunchVerificationFailureResponse;
   readonly renderResourceLink: (
     context: CustomResourceLinkLaunchContext<TLaunch>,
   ) => CustomLaunchResponse;
@@ -126,7 +130,10 @@ function createCustomLaunchRouteHandler<TLaunch extends LtiVerifiedLaunch>(
 ): Handler {
   return async (c) => {
     try {
-      const verification = await verifyLaunchRequest(c, { verifyLaunch });
+      const verification = await verifyLaunchRequest(c, {
+        verifyLaunch,
+        onVerificationFailure: options.onVerificationFailure,
+      });
       if (!verification.success) return verification.response;
 
       const session = await options.ltiTool.createSessionFromVerifiedLaunch(
@@ -158,15 +165,23 @@ function createCustomLaunchRouteHandler<TLaunch extends LtiVerifiedLaunch>(
         }
       }
     } catch (error) {
-      options.logger.error({ error, path: c.req.path }, 'Custom launch endpoint error');
-      if (options.onError) return await options.onError({ hono: c, error });
-      if (error instanceof ZodError) {
-        return c.json({ error: 'Invalid launch parameters' }, 400);
-      }
-      if (error instanceof LtiLaunchMessageResolutionError) {
-        return c.json({ error: 'Unsupported launch message' }, 400);
-      }
-      return c.json({ error: 'Internal server error' }, 500);
+      return await renderCustomLaunchError(c, options, error);
     }
   };
+}
+
+async function renderCustomLaunchError<TLaunch extends LtiVerifiedLaunch>(
+  c: Context,
+  options: Pick<CustomLaunchRendererOptions<TLaunch>, 'logger' | 'onError'>,
+  error: unknown,
+): Promise<Response> {
+  options.logger.error({ error, path: c.req.path }, 'Custom launch endpoint error');
+  if (options.onError) return await options.onError({ hono: c, error });
+  if (error instanceof ZodError) {
+    return c.json({ error: 'Invalid launch parameters' }, 400);
+  }
+  if (error instanceof LtiLaunchMessageResolutionError) {
+    return c.json({ error: 'Unsupported launch message' }, 400);
+  }
+  return c.json({ error: 'Internal server error' }, 500);
 }

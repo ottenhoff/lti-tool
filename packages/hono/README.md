@@ -90,7 +90,10 @@ Use `customLaunchRouteHandler` when the app owns launch UI but wants the library
 handle protocol parsing, verification, session creation, and launch-message routing.
 
 ```typescript
-import { customLaunchRouteHandler } from '@longsightgroup/lti-tool/hono';
+import {
+  customLaunchRouteHandler,
+  renderDefaultLaunchVerificationFailureResponse,
+} from '@longsightgroup/lti-tool/hono';
 
 app.post(
   '/lti/launch',
@@ -99,6 +102,10 @@ app.post(
     logger,
     authorizeLaunch: (launch) => ({ success: true, data: { tenantId: 'tenant-1' } }),
     onVerifiedLaunch: ({ session }) => auditLaunch(session),
+    onVerificationFailure: (context) =>
+      context.error.code === 'launch_config_missing_jwks_endpoint'
+        ? context.hono.json({ error: 'Platform registration incomplete' }, 501)
+        : renderDefaultLaunchVerificationFailureResponse(context),
     renderResourceLink: ({ session, advantage }) => renderBadgePage(session, advantage),
     renderDeepLinkingRequest: ({ message }) => renderContentPicker(message),
     onError: ({ hono }) => hono.json({ error: 'Launch failed' }, 400),
@@ -108,6 +115,11 @@ app.post(
 
 The render callbacks receive the Hono context, verified launch, stored session, resolved
 launch message, and session-bound Advantage client.
+Use `onVerificationFailure` on `customLaunchRouteHandler` when your application needs
+custom responses for typed launch verification failures before session creation. Compose
+with `renderDefaultLaunchVerificationFailureResponse` to override only selected error
+codes. `launchRouteHandler` keeps the built-in default mapping and does not accept this
+hook.
 
 ### createLtiOptionalRouteDeps(options)
 
@@ -167,7 +179,8 @@ app.post(
 
 #### launchRouteHandler(deps)
 
-Handles LTI launch verification and session creation.
+Handles LTI launch verification and session creation with the built-in verification-failure
+mapping. Use `customLaunchRouteHandler` instead when you need `onVerificationFailure`.
 
 ```typescript
 import { launchRouteHandler } from '@longsightgroup/lti-tool/hono';

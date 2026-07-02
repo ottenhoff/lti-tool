@@ -1,5 +1,12 @@
 # @longsightgroup/lti-tool
 
+## 0.1.2
+
+### Patch Changes
+
+- Add `onVerificationFailure` to `customLaunchRouteHandler` so applications can map typed launch verification failures to custom HTTP responses while keeping verification result-based.
+- Export `renderDefaultLaunchVerificationFailureResponse` from `@longsightgroup/lti-tool/hono` for custom launch handlers that only override selected verification error codes.
+
 ## 0.1.1
 
 ### Patch Changes

@@ -167,18 +167,31 @@ Resource Link or Deep Linking renderer with the verified launch, session, messag
 context, and session-bound Advantage client.
 
 ```typescript
-import { customLaunchRouteHandler } from '@longsightgroup/lti-tool/hono';
+import {
+  customLaunchRouteHandler,
+  renderDefaultLaunchVerificationFailureResponse,
+} from '@longsightgroup/lti-tool/hono';
 
 app.post(
   '/lti/launch',
   customLaunchRouteHandler({
     ltiTool,
     logger,
+    onVerificationFailure: (context) =>
+      context.error.code === 'launch_config_missing_jwks_endpoint'
+        ? context.hono.json({ error: 'Platform registration incomplete' }, 501)
+        : renderDefaultLaunchVerificationFailureResponse(context),
     renderResourceLink: ({ hono, session }) => hono.html(renderBadge(session)),
     renderDeepLinkingRequest: ({ hono, message }) => hono.html(renderPicker(message)),
   }),
 );
 ```
+
+Use `onVerificationFailure` on `customLaunchRouteHandler` to map typed launch verification
+failures to app-specific HTTP responses while keeping verification result-based. Compose with
+`renderDefaultLaunchVerificationFailureResponse` when you only need to override selected
+error codes. `launchRouteHandler` keeps the built-in default mapping and does not accept
+this hook.
 
 Mount deep linking or dynamic registration explicitly when you need them:
 

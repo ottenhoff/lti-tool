@@ -14,6 +14,11 @@ export type {
   LtiLoginRouteDeps,
   LtiSessionMiddlewareDeps,
 } from '../ltiRouteDeps.js';
+export {
+  renderDefaultLaunchVerificationFailureResponse,
+  type LtiLaunchVerificationFailureContext,
+  type LtiLaunchVerificationFailureResponse,
+} from './launchFlow.js';
 export { deepLinkRouteHandler } from './routes/deepLink.route.js';
 export {
   customLaunchRouteHandler,

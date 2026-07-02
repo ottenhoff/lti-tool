@@ -12,7 +12,7 @@ import {
   type LTISession,
 } from '@longsightgroup/lti-tool';
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { testSession } from '#test-harness/fixtures';
 import { createFakeLtiAdvantage, testVerifiedLaunch } from '#test-harness/testing';
@@ -79,6 +79,14 @@ function createToolPort(session: LTISession): LtiToolPort {
     createSessionFromVerifiedLaunch: () => Promise.resolve(session),
     getSession: () => Promise.resolve(session),
     createAdvantage: () => createFakeLtiAdvantage(),
+  };
+}
+
+function createFailingToolPort(error: LtiLaunchVerificationError): LtiToolPort {
+  const tool = createToolPort(testSession());
+  return {
+    ...tool,
+    verifyLaunch: () => Promise.resolve({ success: false as const, error }),
   };
 }
 
@@ -163,5 +171,57 @@ describe('customLaunchRouteHandler', () => {
 
     expect(response.status).toBe(418);
     expect(await response.text()).toBe('custom error');
+  });
+
+  it('lets onVerificationFailure map typed verification failures', async () => {
+    const error = new LtiLaunchVerificationError(
+      'launch_config_missing_jwks_endpoint',
+      'JWKS endpoint is not configured',
+    );
+    const response = await requestLaunch(createFailingToolPort(error), {
+      onVerificationFailure: ({ error: failure }) =>
+        new Response(failure.code, { status: 501 }),
+    });
+
+    expect(response.status).toBe(501);
+    expect(await response.text()).toBe('launch_config_missing_jwks_endpoint');
+  });
+
+  it('uses the default verification failure response when no hook is provided', async () => {
+    const response = await requestLaunch(
+      createFailingToolPort(
+        new LtiLaunchVerificationError('nonce_replay', 'Nonce replay'),
+      ),
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Authentication failed' });
+  });
+
+  it('uses the default internal server error response for config failures without a hook', async () => {
+    const response = await requestLaunch(
+      createFailingToolPort(
+        new LtiLaunchVerificationError(
+          'launch_config_missing_jwks_endpoint',
+          'JWKS endpoint is not configured',
+        ),
+      ),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Internal server error' });
+  });
+
+  it('does not route result-based verification failures through onError', async () => {
+    const onError = vi.fn(() => new Response('wrong path', { status: 418 }));
+    const response = await requestLaunch(
+      createFailingToolPort(
+        new LtiLaunchVerificationError('nonce_replay', 'Nonce replay'),
+      ),
+      { onError },
+    );
+
+    expect(response.status).toBe(401);
+    expect(onError).not.toHaveBeenCalled();
   });
 });
