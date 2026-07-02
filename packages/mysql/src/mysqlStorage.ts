@@ -1,7 +1,6 @@
-import { isServerlessEnvironment } from '@longsightgroup/lti-tool';
+import { isServerlessEnvironment, type LtiLogger } from '@longsightgroup/lti-tool';
 import { drizzle } from 'drizzle-orm/mysql2';
 import mysql from 'mysql2/promise';
-import type { Logger } from 'pino';
 
 import {
   RelationalStorage,
@@ -18,7 +17,7 @@ import type { MySqlStorageConfig } from './interfaces/mySqlStorageConfig.js';
  * MySQL implementation of LTI storage interface.
  */
 export class MySqlStorage extends RelationalStorage {
-  private readonly adapterLogger: Logger;
+  private readonly adapterLogger: LtiLogger;
   private readonly pool: mysql.Pool;
 
   constructor(config: MySqlStorageConfig) {
@@ -63,7 +62,7 @@ export class MySqlStorage extends RelationalStorage {
 
 function resolveConnectionOptions(
   config: MySqlStorageConfig,
-  logger: Logger,
+  logger: LtiLogger,
 ): {
   readonly connectionLimit: number;
   readonly isServerless: boolean;

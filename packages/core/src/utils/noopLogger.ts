@@ -1,15 +1,13 @@
-import type { Logger } from 'pino';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 
 const noopLogger = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-  // SAFETY: Call sites in this package only require pino's level methods; the
-  // object intentionally discards those calls without carrying logger state.
-} as unknown as Logger;
+  debug: (): void => {},
+  info: (): void => {},
+  warn: (): void => {},
+  error: (): void => {},
+} satisfies LtiLogger;
 
 /** Returns a shared logger implementation that discards all log events. */
-export function createNoopLogger(): Logger {
+export function createNoopLogger(): LtiLogger {
   return noopLogger;
 }

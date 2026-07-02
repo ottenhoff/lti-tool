@@ -57,10 +57,10 @@ const storage = new MemoryStorage();
 ### With Logger
 
 ```typescript
-import pino from 'pino';
+import { createNoopLogger } from '@longsightgroup/lti-tool';
 
 const storage = new MemoryStorage({
-  logger: pino(),
+  logger: createNoopLogger(),
 });
 ```
 

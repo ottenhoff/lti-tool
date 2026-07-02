@@ -1,4 +1,3 @@
-import type { BaseLogger } from 'pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,6 +7,7 @@ import {
 } from '../src/constants.js';
 import type { LtiServiceError } from '../src/errors/ltiServiceError.js';
 import type { LTISession, LTIStorage } from '../src/interfaces/index.js';
+import type { LtiLogger } from '../src/interfaces/ltiLogger.js';
 import type { ScoreSubmission } from '../src/schemas/lti13/ags/scoreSubmission.schema.js';
 import { AGSService } from '../src/services/ags.service.js';
 import { TokenService } from '../src/services/token.service.js';
@@ -32,16 +32,11 @@ vi.mock('../src/utils/launchConfigValidation.js', () => ({
 const mockGetValidLaunchConfig = vi.mocked(getValidLaunchConfig);
 const MockedTokenService = vi.mocked(TokenService);
 
-const mockLogger: BaseLogger = {
+const mockLogger: LtiLogger = {
   debug: vi.fn(),
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  silent: vi.fn(),
-  level: 'info',
-  msgPrefix: '',
 };
 
 const mockStorage: LTIStorage = {

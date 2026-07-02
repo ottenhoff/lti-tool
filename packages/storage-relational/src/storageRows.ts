@@ -4,9 +4,9 @@ import {
   type LTIClient,
   type LTIDynamicRegistrationSession,
   type LTILaunchConfig,
+  type LtiLogger,
   type LTISession,
 } from '@longsightgroup/lti-tool';
-import type { Logger } from 'pino';
 
 export type ClientRow = Omit<LTIClient, 'deployments'>;
 
@@ -40,7 +40,7 @@ export function toSessionDataRow(session: LTISession): SessionDataRow {
 
 export function parseSessionDataRow(
   row: SessionDataRow,
-  logger?: Pick<Logger, 'warn'>,
+  logger?: Pick<LtiLogger, 'warn'>,
 ): LTISession | undefined {
   const parsed = LTISessionSchema.safeParse({ id: row.id, ...row.data });
   if (!parsed.success) {
@@ -56,7 +56,7 @@ export function parseSessionDataRow(
 
 export function parseRegistrationSessionDataRow(
   row: RegistrationSessionDataRow,
-  logger?: Pick<Logger, 'warn'>,
+  logger?: Pick<LtiLogger, 'warn'>,
 ): LTIDynamicRegistrationSession | undefined {
   const parsed = LTIDynamicRegistrationSessionSchema.safeParse(row.data);
   if (!parsed.success) {

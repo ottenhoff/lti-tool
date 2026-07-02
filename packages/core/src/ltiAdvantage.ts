@@ -1,5 +1,3 @@
-import type { Logger } from 'pino';
-
 import {
   LTI_AGS_SCOPE_LINEITEM,
   LTI_AGS_SCOPE_LINEITEM_READONLY,
@@ -12,6 +10,7 @@ import {
   runLtiServiceOperation,
   type LtiServiceResult,
 } from './errors/ltiServiceError.js';
+import type { LtiLogger } from './interfaces/ltiLogger.js';
 import type { LTISession } from './interfaces/ltiSession.js';
 import type { LTIStorage } from './interfaces/ltiStorage.js';
 import {
@@ -50,7 +49,7 @@ export type LtiAdvantageInput = {
   readonly storage: LTIStorage;
   readonly keyPair: CryptoKeyPair;
   readonly keyId: string;
-  readonly logger: Logger;
+  readonly logger: LtiLogger;
 };
 
 const requireAgsLineItem = <T>(

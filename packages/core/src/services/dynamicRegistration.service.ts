@@ -1,5 +1,3 @@
-import type { BaseLogger } from 'pino';
-
 import {
   LTI_CLAIM_TOOL_CONFIGURATION,
   LTI_AGS_SCOPE_LINEITEM,
@@ -13,6 +11,7 @@ import type { DynamicRegistrationConfig } from '../interfaces/ltiConfig.js';
 import type { LTIDeployment } from '../interfaces/ltiDeployment.js';
 import type { LTIDynamicRegistrationSession } from '../interfaces/ltiDynamicRegistrationSession.js';
 import type { LTILaunchConfig } from '../interfaces/ltiLaunchConfig.js';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 import type { LTIStorage } from '../interfaces/ltiStorage.js';
 import {
   projectDynamicRegistrationLaunchRegistration,
@@ -111,12 +110,12 @@ export class DynamicRegistrationService {
    *
    * @param storage - Storage adapter for persisting client and deployment configurations
    * @param dynamicRegistrationConfig - Tool configuration including URLs and service settings
-   * @param logger - Logger instance for debug and error logging
+   * @param logger - Structured logger for debug and error logging
    */
   constructor(
     private storage: LTIStorage,
     private dynamicRegistrationConfig: DynamicRegistrationConfig,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
   ) {}
 
   /**

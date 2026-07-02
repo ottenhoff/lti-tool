@@ -1,10 +1,9 @@
-import type { BaseLogger } from 'pino';
-
 import { LTI_AGS_SCOPE_PREFIX } from '../../constants.js';
 import {
   LtiServiceError,
   summarizeLtiServiceResponseBody,
 } from '../../errors/ltiServiceError.js';
+import type { LtiLogger } from '../../interfaces/ltiLogger.js';
 import {
   RegistrationResponseSchema,
   type OpenIDConfiguration,
@@ -163,7 +162,7 @@ export function renderDynamicRegistrationForm(
 export async function postRegistrationToPlatform(
   registrationEndpoint: string,
   registrationPayload: unknown,
-  logger: BaseLogger,
+  logger: LtiLogger,
   registrationToken?: string,
 ): Promise<RegistrationResponse> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };

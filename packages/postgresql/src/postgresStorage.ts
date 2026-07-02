@@ -1,6 +1,5 @@
-import { isServerlessEnvironment } from '@longsightgroup/lti-tool';
+import { isServerlessEnvironment, type LtiLogger } from '@longsightgroup/lti-tool';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import type { Logger } from 'pino';
 import postgres from 'postgres';
 
 import {
@@ -18,7 +17,7 @@ import type { PostgresStorageConfig } from './interfaces/postgresStorageConfig.j
  * PostgreSQL implementation of LTI storage interface.
  */
 export class PostgresStorage extends RelationalStorage {
-  private readonly adapterLogger: Logger;
+  private readonly adapterLogger: LtiLogger;
   private readonly sql: postgres.Sql;
 
   constructor(config: PostgresStorageConfig) {
@@ -62,7 +61,7 @@ export class PostgresStorage extends RelationalStorage {
 
 function resolveConnectionOptions(
   config: PostgresStorageConfig,
-  logger: Logger,
+  logger: LtiLogger,
 ): {
   readonly idleTimeout: number;
   readonly isServerless: boolean;

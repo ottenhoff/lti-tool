@@ -62,7 +62,7 @@ changes.
   - `idleTimeout`: Idle timeout in seconds before connection is closed (default: 20)
 - **nonceExpirationSeconds** (optional): Nonce TTL in seconds (default: 600)
 
-- **logger** (optional): Pino logger for debugging
+- **logger** (optional): Structural logger for debugging
 
 ## Database Schema
 

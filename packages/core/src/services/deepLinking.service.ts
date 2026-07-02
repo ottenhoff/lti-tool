@@ -1,5 +1,4 @@
 import { SignJWT } from 'jose';
-import type { BaseLogger } from 'pino';
 
 import {
   LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS,
@@ -10,6 +9,7 @@ import {
   LTI_MESSAGE_TYPE_DEEP_LINKING_RESPONSE,
   LTI_VERSION_1P3P0,
 } from '../constants.js';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 import type { LTISession } from '../interfaces/ltiSession.js';
 import type { DeepLinkingContentItem } from '../schemas/lti13/deepLinking/contentItem.schema.js';
 import { escapeHtml } from '../utils/htmlEscaping.js';
@@ -25,12 +25,12 @@ export class DeepLinkingService {
    * Creates a new DeepLinkingService instance.
    *
    * @param keyPair - RSA key pair for signing client assertion JWTs (must be RS256 compatible)
-   * @param logger - Logger instance for debug and error logging
+   * @param logger - Structured logger for debug and error logging
    * @param keyId - Key identifier for JWT header, should match JWKS key ID (defaults to 'main')
    */
   constructor(
     private keyPair: CryptoKeyPair,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
     private keyId = 'main',
   ) {}
 

@@ -1,10 +1,9 @@
-import type { BaseLogger } from 'pino';
-
 import { LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY } from '../constants.js';
 import {
   LtiServiceError,
   summarizeLtiServiceResponseBody,
 } from '../errors/ltiServiceError.js';
+import type { LtiLogger } from '../interfaces/ltiLogger.js';
 import type { LTISession } from '../interfaces/ltiSession.js';
 import type { LTIStorage } from '../interfaces/ltiStorage.js';
 import { getValidLaunchConfig } from '../utils/launchConfigValidation.js';
@@ -24,12 +23,12 @@ export class NRPSService {
    *
    * @param tokenService - Token service for obtaining OAuth2 bearer tokens
    * @param storage - Storage adapter for retrieving launch configurations
-   * @param logger - Logger instance for debug and error logging
+   * @param logger - Structured logger for debug and error logging
    */
   constructor(
     private tokenService: TokenService,
     private storage: LTIStorage,
-    private logger: BaseLogger,
+    private logger: LtiLogger,
   ) {}
 
   /**

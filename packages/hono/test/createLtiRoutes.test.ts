@@ -1,13 +1,13 @@
-import { LTITool } from '@longsightgroup/lti-tool';
+import { LTITool, type LtiLogger } from '@longsightgroup/lti-tool';
 import { Hono } from 'hono';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MemoryStorage } from '../../memory/src/index.js';
 import { createLtiRoutes } from '../src/ltiRoutes/createLtiRoutes.js';
 
-function mountLtiRoutes(ltiTool: LTITool) {
+function mountLtiRoutes(ltiTool: LTITool, logger?: LtiLogger) {
   const app = new Hono();
-  app.route('/lti', createLtiRoutes({ ltiTool }));
+  app.route('/lti', createLtiRoutes({ ltiTool, logger }));
   return app;
 }
 
@@ -63,6 +63,26 @@ describe('createLtiRoutes', () => {
     expect((await app.request('/lti/register')).status).toBe(404);
     expect((await app.request('/lti/register/complete', { method: 'POST' })).status).toBe(
       404,
+    );
+  });
+
+  it('logs route errors through the provided logger', async () => {
+    const error = vi.fn();
+    const logger: LtiLogger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error,
+    };
+    vi.spyOn(ltiTool, 'getJWKS').mockRejectedValue(new Error('jwks failed'));
+    const app = mountLtiRoutes(ltiTool, logger);
+
+    const response = await app.request('/lti/jwks');
+
+    expect(response.status).toBe(500);
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/lti/jwks' }),
+      'JWKS endpoint error',
     );
   });
 });

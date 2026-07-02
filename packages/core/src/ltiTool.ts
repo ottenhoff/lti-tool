@@ -1,8 +1,8 @@
 import { exportJWK, SignJWT } from 'jose';
-import type { Logger } from 'pino';
 
 import type { JWKS } from './interfaces/jwks.js';
 import type { LTIConfig } from './interfaces/ltiConfig.js';
+import type { LtiLogger } from './interfaces/ltiLogger.js';
 import type { LTISession } from './interfaces/ltiSession.js';
 import { LtiAdvantage } from './ltiAdvantage.js';
 import { HandleLoginParamsSchema, SessionIdSchema } from './schemas/index.js';
@@ -47,7 +47,7 @@ import { createNoopLogger } from './utils/noopLogger.js';
 export class LTITool {
   /** Cache for JWKS remote key sets to improve performance */
   private jwksCache: LtiLaunchJwksCache = new Map();
-  private logger: Logger;
+  private logger: LtiLogger;
   private tokenService: TokenService;
 
   /**

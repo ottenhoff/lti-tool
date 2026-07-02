@@ -1,7 +1,7 @@
-import type { Logger } from 'pino';
+import type { LtiLogger } from '@longsightgroup/lti-tool';
 
 export interface DynamoDbStorageConfig {
-  logger?: Logger;
+  logger?: LtiLogger;
   controlPlaneTable: string;
   dataPlaneTable: string;
   launchConfigTable: string;

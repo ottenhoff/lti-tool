@@ -3,32 +3,32 @@ import type {
   JWKS,
   LtiDynamicRegistration,
   LtiLaunchVerificationResult,
+  LtiLogger,
   LtiToolPort,
   LtiVerifiedLaunch,
   LTISession,
   RegistrationRequest,
 } from '@longsightgroup/lti-tool';
-import type { Logger } from 'pino';
 
 export type LtiJwksRouteDeps = {
   getJWKS: () => Promise<JWKS>;
-  logger: Logger;
+  logger: LtiLogger;
 };
 
 export type LtiLoginRouteDeps = {
   handleLogin: LtiToolPort['handleLogin'];
-  logger: Logger;
+  logger: LtiLogger;
 };
 
 export type LtiLaunchRouteDeps = {
   verifyLaunch: (idToken: string, state: string) => Promise<LtiLaunchVerificationResult>;
   createSessionFromVerifiedLaunch: (launch: LtiVerifiedLaunch) => Promise<LTISession>;
-  logger: Logger;
+  logger: LtiLogger;
 };
 
 export type LtiDeepLinkRouteDeps = {
   getSession: (sessionId: string) => Promise<LTISession | undefined>;
-  logger: Logger;
+  logger: LtiLogger;
 };
 
 export type LtiInitiateDynamicRegistrationRouteDeps = {
@@ -36,14 +36,14 @@ export type LtiInitiateDynamicRegistrationRouteDeps = {
     request: RegistrationRequest,
     routePath: string,
   ) => ReturnType<LtiDynamicRegistration['initiateDynamicRegistration']>;
-  logger: Logger;
+  logger: LtiLogger;
 };
 
 export type LtiCompleteDynamicRegistrationRouteDeps = {
   completeDynamicRegistration: (
     form: DynamicRegistrationForm,
   ) => ReturnType<LtiDynamicRegistration['completeDynamicRegistration']>;
-  logger: Logger;
+  logger: LtiLogger;
 };
 
 export type LtiSessionMiddlewareDeps = {

@@ -74,7 +74,7 @@ app.get('/protected/content', (c) => {
 
 ### createLtiRoutes(options)
 
-Mounts required LTI protocol routes (`/jwks`, `/login`, `/launch`) on a Hono sub-app. Pass the same `LTITool` instance you use elsewhere in your app. Optionally pass a `logger` for route-level error logging.
+Mounts required LTI protocol routes (`/jwks`, `/login`, `/launch`) on a Hono sub-app. Pass the same `LTITool` instance you use elsewhere in your app. Optionally pass a `logger` for route-level error logging; otherwise routes use a noop logger.
 
 ```typescript
 import { createLtiRoutes } from '@longsightgroup/lti-tool/hono';
@@ -111,7 +111,7 @@ launch message, and session-bound Advantage client.
 
 ### createLtiOptionalRouteDeps(options)
 
-Binds dependency objects for optional routes from `LTITool` and `LtiDynamicRegistration` instances. Pass the same `logger` you use with `createLtiRoutes` when you want route-level error logging.
+Binds dependency objects for optional routes from `LTITool` and `LtiDynamicRegistration` instances. Pass the same optional `logger` you use with `createLtiRoutes` when you want route-level error logging.
 
 Deep linking response creation is app-owned: call `ltiTool.createAdvantage(session).createDeepLinkingResponse(contentItems)` from your route handler, or `createDeepLinkingHtmlResponse(contentItems)` when your route should return a ready-to-send HTML `Response`.
 
