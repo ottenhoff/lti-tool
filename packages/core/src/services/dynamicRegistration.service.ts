@@ -1,10 +1,4 @@
-import {
-  LTI_CLAIM_TOOL_CONFIGURATION,
-  LTI_AGS_SCOPE_LINEITEM,
-  LTI_AGS_SCOPE_RESULT_READONLY,
-  LTI_AGS_SCOPE_SCORE,
-  LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY,
-} from '../constants.js';
+import { LTI_CLAIM_TOOL_CONFIGURATION } from '../constants.js';
 import { LtiServiceError } from '../errors/ltiServiceError.js';
 import type { LTIClient } from '../interfaces/ltiClient.js';
 import type { DynamicRegistrationConfig } from '../interfaces/ltiConfig.js';
@@ -17,6 +11,10 @@ import {
   projectDynamicRegistrationLaunchRegistration,
   upsertLaunchRegistration,
 } from '../launchRegistration.js';
+import {
+  DynamicRegistrationAppStateSchema,
+  type DynamicRegistrationAppState,
+} from '../schemas/lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
 import type { DynamicRegistrationForm } from '../schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
 import {
   type OpenIDConfiguration,
@@ -24,7 +22,6 @@ import {
 } from '../schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
 import type { RegistrationRequest } from '../schemas/lti13/dynamicRegistration/registrationRequest.schema.js';
 import type { RegistrationResponse } from '../schemas/lti13/dynamicRegistration/registrationResponse.schema.js';
-import type { ToolRegistrationPayload } from '../schemas/lti13/dynamicRegistration/toolRegistrationPayload.schema.js';
 import { escapeHtml } from '../utils/htmlEscaping.js';
 import { ltiServiceFetch } from '../utils/ltiServiceFetch.js';
 
@@ -32,10 +29,7 @@ import {
   postRegistrationToPlatform,
   renderDynamicRegistrationForm,
 } from './dynamicRegistrationHandlers/platform.js';
-import {
-  buildDynamicRegistrationMessages,
-  transformDynamicRegistrationPayload,
-} from './dynamicRegistrationProfiles.js';
+import { buildToolRegistrationPayload } from './dynamicRegistrationPayload.js';
 
 export interface LtiDynamicRegistrationCompletionResult {
   html: string;
@@ -44,13 +38,19 @@ export interface LtiDynamicRegistrationCompletionResult {
   launchConfig: LTILaunchConfig;
   createdClient: boolean;
   createdDeployment: boolean;
+  appState?: DynamicRegistrationAppState;
+}
+
+export interface LtiDynamicRegistrationInitiationOptions {
+  /** JSON-serializable app-owned state returned with the completion result */
+  appState?: DynamicRegistrationAppState;
 }
 
 const storeDynamicRegistrationResult = (input: {
   storage: LTIStorage;
   session: LTIDynamicRegistrationSession;
   registrationResponse: RegistrationResponse;
-}): Promise<Omit<LtiDynamicRegistrationCompletionResult, 'html'>> =>
+}): Promise<Omit<LtiDynamicRegistrationCompletionResult, 'html' | 'appState'>> =>
   upsertLaunchRegistration(
     input.storage,
     projectDynamicRegistrationLaunchRegistration({
@@ -174,6 +174,7 @@ export class DynamicRegistrationService {
   async initiateDynamicRegistration(
     registrationRequest: RegistrationRequest,
     requestPath: string,
+    options: LtiDynamicRegistrationInitiationOptions = {},
   ): Promise<string> {
     // 1. Validate request
     const openIdConfiguration =
@@ -181,11 +182,17 @@ export class DynamicRegistrationService {
 
     // 2. generate and store session
     const sessionToken = crypto.randomUUID();
-    await this.storage.setRegistrationSession(sessionToken, {
+    const appState = DynamicRegistrationAppStateSchema.optional().parse(options.appState);
+    const session: LTIDynamicRegistrationSession = {
       openIdConfiguration,
-      registrationToken: registrationRequest.registration_token,
+      ...(registrationRequest.registration_token === undefined
+        ? {}
+        : { registrationToken: registrationRequest.registration_token }),
+      ...(appState === undefined ? {} : { appState }),
       expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
-    });
+    };
+
+    await this.storage.setRegistrationSession(sessionToken, session);
 
     // 3. build registration form
     return renderDynamicRegistrationForm(openIdConfiguration, requestPath, sessionToken);
@@ -215,13 +222,15 @@ export class DynamicRegistrationService {
       });
     }
 
-    // 1. build payload
-    const toolRegistrationPayload = this.buildRegistrationPayload(
-      dynamicRegistrationForm.services ?? [],
-      session.openIdConfiguration,
-    );
+    // 2. build payload
+    const toolRegistrationPayload = buildToolRegistrationPayload({
+      config: this.dynamicRegistrationConfig,
+      openIdConfiguration: session.openIdConfiguration,
+      selectedServices: dynamicRegistrationForm.services ?? [],
+      appState: session.appState,
+    });
 
-    // 2. Post registration request to the platform
+    // 3. Post registration request to the platform
     const registrationResponse = await postRegistrationToPlatform(
       session.openIdConfiguration.registration_endpoint,
       toolRegistrationPayload,
@@ -229,18 +238,19 @@ export class DynamicRegistrationService {
       session.registrationToken,
     );
 
-    // 3. save to storage
+    // 4. save to storage
     const storedRegistration = await storeDynamicRegistrationResult({
       storage: this.storage,
       session,
       registrationResponse,
     });
 
-    // 4. return success
+    // 5. return success
     const successHtml = this.getRegistrationSuccessHtml(registrationResponse);
     return {
       html: successHtml,
       ...storedRegistration,
+      ...(session.appState === undefined ? {} : { appState: session.appState }),
     };
   }
 
@@ -259,83 +269,6 @@ export class DynamicRegistrationService {
       await this.storage.deleteRegistrationSession(sessionToken);
     }
     return session;
-  }
-
-  /**
-   * Builds array of OAuth scopes based on selected LTI services during registration.
-   * Maps service selections to their corresponding LTI Advantage scope URIs.
-   *
-   * @param selectedServices - Array of service names selected by administrator ('ags', 'nrps', etc.)
-   * @returns Array of OAuth scope URIs to request from the platform
-   */
-  private buildScopes(selectedServices: string[]): string[] {
-    const scopes = [];
-
-    if (selectedServices?.includes('ags')) {
-      scopes.push(
-        LTI_AGS_SCOPE_LINEITEM,
-        LTI_AGS_SCOPE_RESULT_READONLY,
-        LTI_AGS_SCOPE_SCORE,
-      );
-    }
-
-    if (selectedServices?.includes('nrps')) {
-      scopes.push(LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY);
-    }
-
-    return scopes;
-  }
-
-  /**
-   * Constructs the complete tool registration payload for platform submission.
-   * Combines tool configuration, selected services, and OAuth parameters into LTI 1.3 registration format.
-   *
-   * @param selectedServices - Array of service names selected by administrator
-   * @param openIdConfiguration - OpenID configuration used to select any platform-specific profile overrides
-   * @returns Complete registration payload ready for platform submission
-   */
-  private buildRegistrationPayload(
-    selectedServices: string[],
-    openIdConfiguration: OpenIDConfiguration,
-  ): ToolRegistrationPayload {
-    const config = this.dynamicRegistrationConfig;
-
-    const deepLinkingUri = config.deepLinkingUri || `${config.url}/lti/deep-linking`;
-    const jwksUri = config.jwksUri || `${config.url}/lti/jwks`;
-    const launchUri = config.launchUri || `${config.url}/lti/launch`;
-    const loginUri = config.loginUri || `${config.url}/lti/login`;
-
-    const messages = buildDynamicRegistrationMessages(openIdConfiguration, {
-      selectedServices,
-      deepLinkingUri,
-      launchUri,
-      toolName: config.name,
-      registrationConfig: config,
-    });
-    const scopes = this.buildScopes(selectedServices);
-
-    return transformDynamicRegistrationPayload(openIdConfiguration, {
-      payload: {
-        application_type: 'web',
-        response_types: ['id_token'],
-        grant_types: ['implicit', 'client_credentials'],
-        initiate_login_uri: loginUri,
-        redirect_uris: [config.url, launchUri, ...(config.redirectUris || [])],
-        client_name: config.name,
-        jwks_uri: jwksUri,
-        logo_uri: config.logo,
-        scope: scopes.join(' '),
-        token_endpoint_auth_method: 'private_key_jwt',
-        [LTI_CLAIM_TOOL_CONFIGURATION]: {
-          domain: new URL(config.url).hostname,
-          description: config.description,
-          target_link_uri: config.url,
-          claims: ['iss', 'sub', 'name', 'email'],
-          messages,
-        },
-      },
-      registrationConfig: config,
-    });
   }
 
   private async validateDynamicRegistrationResponse(

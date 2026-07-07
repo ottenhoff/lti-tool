@@ -122,6 +122,11 @@ export function testRegistrationSession(
 ): LTIDynamicRegistrationSession {
   return {
     registrationToken: 'registration-token',
+    appState: {
+      tenantId: 'tenant-1',
+      returnPath: '/admin/lti',
+      selectedFeatures: ['launch', 'deep_linking'],
+    },
     expiresAt: Date.now() + 60_000,
     openIdConfiguration: {
       issuer: 'https://platform.example.com',

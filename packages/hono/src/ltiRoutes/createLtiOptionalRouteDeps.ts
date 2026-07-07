@@ -10,6 +10,8 @@ import { createLtiRouteLogger, type LtiRouteLoggerOptions } from '../ltiRouteLog
 export type CreateLtiOptionalRouteDepsOptions = LtiRouteLoggerOptions & {
   ltiTool: Pick<LtiToolPort, 'getSession'>;
   dynamicRegistration: LtiDynamicRegistration;
+  getDynamicRegistrationAppState?: LtiInitiateDynamicRegistrationRouteDeps['getDynamicRegistrationAppState'];
+  onRegistrationComplete?: LtiCompleteDynamicRegistrationRouteDeps['onRegistrationComplete'];
 };
 
 export type LtiOptionalRouteDeps = {
@@ -31,7 +33,12 @@ export type LtiOptionalRouteDeps = {
 export function createLtiOptionalRouteDeps(
   options: CreateLtiOptionalRouteDepsOptions,
 ): LtiOptionalRouteDeps {
-  const { dynamicRegistration, ltiTool } = options;
+  const {
+    dynamicRegistration,
+    getDynamicRegistrationAppState,
+    ltiTool,
+    onRegistrationComplete,
+  } = options;
   const logger = createLtiRouteLogger(options);
 
   return {
@@ -40,13 +47,19 @@ export function createLtiOptionalRouteDeps(
       logger,
     },
     initiateDynamicRegistration: {
-      initiateDynamicRegistration: (request, routePath) =>
-        dynamicRegistration.initiateDynamicRegistration(request, routePath),
+      initiateDynamicRegistration: (request, routePath, initiationOptions) =>
+        dynamicRegistration.initiateDynamicRegistration(
+          request,
+          routePath,
+          initiationOptions,
+        ),
+      getDynamicRegistrationAppState,
       logger,
     },
     completeDynamicRegistration: {
       completeDynamicRegistration: (form) =>
         dynamicRegistration.completeDynamicRegistration(form),
+      onRegistrationComplete,
       logger,
     },
   };

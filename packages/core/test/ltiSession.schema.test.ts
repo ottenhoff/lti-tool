@@ -88,6 +88,10 @@ describe('LTI session schemas', () => {
         },
       },
       registrationToken: 'registration-token-123',
+      appState: {
+        tenantId: 'tenant-1',
+        returnPath: '/admin/lti',
+      },
       expiresAt: Date.now() + 600_000,
     };
 
@@ -101,6 +105,35 @@ describe('LTI session schemas', () => {
           issuer: 'not-a-url',
         },
         expiresAt: 'soon',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects non-json dynamic registration app state', () => {
+    expect(() =>
+      LTIDynamicRegistrationSessionSchema.parse({
+        openIdConfiguration: {
+          issuer: 'https://platform.example.com',
+          authorization_endpoint: 'https://platform.example.com/authorize',
+          registration_endpoint: 'https://platform.example.com/register',
+          jwks_uri: 'https://platform.example.com/jwks',
+          token_endpoint: 'https://platform.example.com/token',
+          token_endpoint_auth_methods_supported: ['private_key_jwt'],
+          token_endpoint_auth_signing_alg_values_supported: ['RS256'],
+          scopes_supported: [],
+          response_types_supported: ['id_token'],
+          id_token_signing_alg_values_supported: ['RS256'],
+          claims_supported: ['iss', 'sub'],
+          subject_types_supported: ['public'],
+          [LTI_CLAIM_PLATFORM_CONFIGURATION]: {
+            product_family_code: 'canvas',
+            version: 'cloud',
+            messages_supported: [{ type: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST }],
+          },
+        },
+        registrationToken: 'registration-token-123',
+        appState: () => 'not-json',
+        expiresAt: Date.now() + 600_000,
       }),
     ).toThrow();
   });

@@ -6,9 +6,22 @@ import {
   LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
   LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
 } from '../src/constants.js';
-import type { LTIStorage } from '../src/interfaces/ltiStorage.js';
+import type {
+  DynamicRegistrationConfig,
+  LTIDynamicRegistrationSession,
+  LtiLogger,
+  LTIStorage,
+} from '../src/index.js';
 import type { DynamicRegistrationForm } from '../src/schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
+import {
+  ToolRegistrationPayloadSchema,
+  type ToolRegistrationPayload,
+} from '../src/schemas/lti13/dynamicRegistration/toolRegistrationPayload.schema.js';
 import { DynamicRegistrationService } from '../src/services/dynamicRegistration.service.js';
+
+const TOOL_URL = 'https://lti.local.test';
+const TOOL_NAME = 'My LTI Tool';
+const SESSION_TOKEN = 'session-token-123';
 
 const createOpenIdConfiguration = ({
   productFamilyCode,
@@ -63,26 +76,173 @@ const createRegistrationResponse = (clientId: string) => ({
   application_type: 'web',
   response_types: ['id_token'],
   grant_types: ['implicit', 'client_credentials'],
-  initiate_login_uri: 'https://lti.local.test/lti/login',
-  redirect_uris: ['https://lti.local.test', 'https://lti.local.test/lti/launch'],
-  client_name: 'My LTI Tool',
-  jwks_uri: 'https://lti.local.test/lti/jwks',
+  initiate_login_uri: `${TOOL_URL}/lti/login`,
+  redirect_uris: [TOOL_URL, `${TOOL_URL}/lti/launch`],
+  client_name: TOOL_NAME,
+  jwks_uri: `${TOOL_URL}/lti/jwks`,
   token_endpoint_auth_method: 'private_key_jwt',
   scope: '',
   [LTI_CLAIM_TOOL_CONFIGURATION]: {
     domain: 'lti.local.test',
-    target_link_uri: 'https://lti.local.test',
+    target_link_uri: TOOL_URL,
     claims: ['iss', 'sub', 'name', 'email'],
     messages: [{ type: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST }],
   },
 });
+
+function createRegistrationResponseWithDeployment(
+  clientId: string,
+  deploymentId: string,
+) {
+  const response = createRegistrationResponse(clientId);
+  return {
+    ...response,
+    [LTI_CLAIM_TOOL_CONFIGURATION]: {
+      ...response[LTI_CLAIM_TOOL_CONFIGURATION],
+      deployment_id: deploymentId,
+    },
+  };
+}
+
+function createLoggerMock(): LtiLogger {
+  return {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  };
+}
+
+function createToolConfig(
+  overrides: Partial<DynamicRegistrationConfig> = {},
+): DynamicRegistrationConfig {
+  return {
+    url: TOOL_URL,
+    name: TOOL_NAME,
+    ...overrides,
+  };
+}
+
+function createService(input: {
+  storage: LTIStorage;
+  config?: DynamicRegistrationConfig;
+}): DynamicRegistrationService {
+  return new DynamicRegistrationService(
+    input.storage,
+    input.config ?? createToolConfig(),
+    createLoggerMock(),
+  );
+}
+
+function mockJsonFetch(data: unknown): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(() =>
+    Promise.resolve(
+      new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  );
+  global.fetch = fetchMock as typeof fetch;
+  return fetchMock;
+}
+
+function parsePostedRegistrationPayload(
+  body: BodyInit | null | undefined,
+): ToolRegistrationPayload {
+  if (typeof body !== 'string') {
+    throw new Error('expected registration payload body to be a string');
+  }
+
+  return ToolRegistrationPayloadSchema.parse(JSON.parse(body));
+}
+
+type CompleteRegistrationScenario = {
+  productFamilyCode: string;
+  baseUrl?: string;
+  config?: DynamicRegistrationConfig;
+  registrationResponse?: unknown;
+  services?: DynamicRegistrationForm['services'];
+  session?: Partial<LTIDynamicRegistrationSession>;
+};
+
+async function completeRegistrationAndCapturePayload(
+  scenario: CompleteRegistrationScenario,
+): Promise<{
+  fetchCall: { input: unknown; init?: RequestInit };
+  requestBody: ToolRegistrationPayload;
+  result: Awaited<ReturnType<DynamicRegistrationService['completeDynamicRegistration']>>;
+  storage: LTIStorage;
+}> {
+  const storage = createStorageMock();
+  const service = createService({ storage, config: scenario.config });
+  const baseUrl = scenario.baseUrl ?? 'https://platform.example';
+  const openIdConfiguration = createOpenIdConfiguration({
+    productFamilyCode: scenario.productFamilyCode,
+    baseUrl,
+  });
+
+  vi.mocked(storage.getRegistrationSession).mockResolvedValue({
+    openIdConfiguration,
+    registrationToken: 'reg-token-123',
+    expiresAt: Date.now() + 10_000,
+    ...scenario.session,
+  });
+  vi.mocked(storage.addClient).mockResolvedValue('client-record-id');
+  vi.mocked(storage.addDeployment).mockResolvedValue('deployment-record-id');
+
+  const fetchMock = mockJsonFetch(
+    scenario.registrationResponse ??
+      createRegistrationResponse(`${scenario.productFamilyCode}-client-id`),
+  );
+
+  const result = await service.completeDynamicRegistration({
+    sessionToken: SESSION_TOKEN,
+    services: scenario.services ?? [],
+  });
+
+  const fetchCall = fetchMock.mock.calls[0];
+  if (!fetchCall) {
+    throw new Error('expected registration request to be posted');
+  }
+
+  return {
+    fetchCall: { input: fetchCall[0], init: fetchCall[1] },
+    requestBody: parsePostedRegistrationPayload(fetchCall[1]?.body),
+    result,
+    storage,
+  };
+}
+
+function expectedPlacementMessages(input: {
+  resourceLinkPlacements: string[];
+  deepLinkPlacements: string[];
+}) {
+  return [
+    input.resourceLinkPlacements.length
+      ? {
+          type: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+          label: TOOL_NAME,
+          target_link_uri: `${TOOL_URL}/lti/launch`,
+          placements: input.resourceLinkPlacements,
+        }
+      : { type: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST },
+    ...input.deepLinkPlacements.map((placement) => ({
+      type: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+      target_link_uri: `${TOOL_URL}/lti/deep-linking`,
+      label: TOOL_NAME,
+      placements: [placement],
+      supported_types: ['ltiResourceLink'],
+    })),
+  ];
+}
 
 describe('DynamicRegistrationService', () => {
   const originalFetch = global.fetch;
   const originalRandomUUID = global.crypto.randomUUID;
 
   beforeEach(() => {
-    global.crypto.randomUUID = vi.fn(() => 'session-token-123') as any;
+    global.crypto.randomUUID = vi.fn(() => SESSION_TOKEN) as any;
   });
 
   afterEach(() => {
@@ -93,31 +253,13 @@ describe('DynamicRegistrationService', () => {
 
   it('renders the generic registration page for spec-compliant platforms', async () => {
     const storage = createStorageMock();
-    const logger = { debug: vi.fn(), error: vi.fn() } as any;
-    const service = new DynamicRegistrationService(
-      storage,
-      {
-        url: 'https://lti.local.test',
-        name: 'My LTI Tool',
-      },
-      logger,
+    const service = createService({ storage });
+    mockJsonFetch(
+      createOpenIdConfiguration({
+        productFamilyCode: 'sakailms.org',
+        baseUrl: 'https://sakai.example',
+      }),
     );
-
-    global.fetch = vi.fn(
-      () =>
-        new Response(
-          JSON.stringify(
-            createOpenIdConfiguration({
-              productFamilyCode: 'sakailms.org',
-              baseUrl: 'https://sakai.example',
-            }),
-          ),
-          {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          },
-        ),
-    ) as any;
 
     const html = await service.initiateDynamicRegistration(
       {
@@ -131,63 +273,52 @@ describe('DynamicRegistrationService', () => {
     expect(html).toContain('Configure LTI Advantage Settings');
     expect(html).not.toContain('for Sakai');
     expect(storage.setRegistrationSession).toHaveBeenCalledWith(
-      'session-token-123',
+      SESSION_TOKEN,
       expect.objectContaining({
         registrationToken: 'reg-token-123',
       }),
     );
   });
 
-  it('posts registration to the platform endpoint with bearer token and stores deployment', async () => {
+  it('stores app state during registration initiation', async () => {
     const storage = createStorageMock();
-    const logger = { debug: vi.fn(), error: vi.fn() } as any;
-    const service = new DynamicRegistrationService(
-      storage,
-      {
-        url: 'https://lti.local.test',
-        name: 'My LTI Tool',
-      },
-      logger,
+    const service = createService({ storage });
+    mockJsonFetch(
+      createOpenIdConfiguration({
+        productFamilyCode: 'moodle',
+        baseUrl: 'https://moodle.example',
+      }),
     );
 
-    const sessionToken = 'session-token-123';
-    (storage.getRegistrationSession as any).mockResolvedValue({
-      openIdConfiguration: createOpenIdConfiguration({
-        productFamilyCode: 'sakailms.org',
-        baseUrl: 'https://sakai.example',
+    await service.initiateDynamicRegistration(
+      {
+        openid_configuration: 'https://moodle.example/.well-known/openid-configuration',
+        registration_token: 'reg-token-123',
+      },
+      '/lti/register',
+      { appState: { tenantId: 'tenant-1', returnPath: '/admin/lti' } },
+    );
+
+    expect(storage.setRegistrationSession).toHaveBeenCalledWith(
+      SESSION_TOKEN,
+      expect.objectContaining({
+        appState: { tenantId: 'tenant-1', returnPath: '/admin/lti' },
       }),
-      registrationToken: 'reg-token-123',
-      expiresAt: Date.now() + 10_000,
+    );
+  });
+
+  it('posts registration to the platform endpoint with bearer token and stores deployment', async () => {
+    const { fetchCall, result, storage } = await completeRegistrationAndCapturePayload({
+      productFamilyCode: 'sakailms.org',
+      baseUrl: 'https://sakai.example',
+      registrationResponse: createRegistrationResponseWithDeployment(
+        'sakai-client-id',
+        '1',
+      ),
+      session: { appState: { tenantId: 'tenant-1' } },
     });
-    (storage.addClient as any).mockResolvedValue('client-record-id');
-    (storage.addDeployment as any).mockResolvedValue('deployment-record-id');
 
-    global.fetch = vi.fn(
-      () =>
-        new Response(
-          JSON.stringify({
-            ...createRegistrationResponse('sakai-client-id'),
-            [LTI_CLAIM_TOOL_CONFIGURATION]: {
-              ...createRegistrationResponse('sakai-client-id')[
-                LTI_CLAIM_TOOL_CONFIGURATION
-              ],
-              deployment_id: '1',
-            },
-          }),
-          {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          },
-        ),
-    ) as any;
-
-    const form: DynamicRegistrationForm = {
-      sessionToken,
-      services: [],
-    };
-    const result = await service.completeDynamicRegistration(form);
-
-    expect(storage.deleteRegistrationSession).toHaveBeenCalledWith(sessionToken);
+    expect(storage.deleteRegistrationSession).toHaveBeenCalledWith(SESSION_TOKEN);
     expect(storage.addClient).toHaveBeenCalledWith(
       expect.objectContaining({
         clientId: 'sakai-client-id',
@@ -224,84 +355,98 @@ describe('DynamicRegistrationService', () => {
       },
       createdClient: true,
       createdDeployment: true,
+      appState: { tenantId: 'tenant-1' },
     });
 
-    const fetchCall = (global.fetch as any).mock.calls[0] as [string, RequestInit];
-    expect(fetchCall[0]).toBe(
+    expect(fetchCall.input).toBe(
       'https://sakai.example/imsblis/lti13/registration_endpoint/1',
     );
-    const headers = new Headers(fetchCall[1].headers);
+    const headers = new Headers(fetchCall.init?.headers);
     expect(headers.get('Authorization')).toBe('Bearer reg-token-123');
   });
 
-  it('keeps non-Canvas platforms on the generic message path', async () => {
-    const storage = createStorageMock();
-    const logger = { debug: vi.fn(), error: vi.fn() } as any;
-    const service = new DynamicRegistrationService(
-      storage,
-      {
-        url: 'https://lti.local.test',
-        name: 'My LTI Tool',
-      },
-      logger,
-    );
-
-    const sessionToken = 'session-token-123';
-    (storage.getRegistrationSession as any).mockResolvedValue({
-      openIdConfiguration: createOpenIdConfiguration({
-        productFamilyCode: 'brightspace',
-        baseUrl: 'https://brightspace.example',
-      }),
-      registrationToken: 'reg-token-123',
-      expiresAt: Date.now() + 10_000,
-    });
-    (storage.addClient as any).mockResolvedValue('client-record-id');
-    (storage.addDeployment as any).mockResolvedValue('deployment-record-id');
-
-    global.fetch = vi.fn(
-      () =>
-        new Response(
-          JSON.stringify(createRegistrationResponse('brightspace-client-id')),
-          {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          },
-        ),
-    ) as any;
-
-    const form: DynamicRegistrationForm = {
-      sessionToken,
+  it('keeps unsupported platforms on the generic message path', async () => {
+    const { requestBody } = await completeRegistrationAndCapturePayload({
+      productFamilyCode: 'blackboard',
+      baseUrl: 'https://blackboard.example',
+      registrationResponse: createRegistrationResponse('blackboard-client-id'),
       services: ['deep_linking'],
-    };
-    await service.completeDynamicRegistration(form);
+    });
 
-    const fetchCall = (global.fetch as any).mock.calls[0] as [string, RequestInit];
-    const requestBody = JSON.parse(fetchCall[1].body as string);
-    const messages = requestBody[LTI_CLAIM_TOOL_CONFIGURATION].messages;
+    expect(requestBody[LTI_CLAIM_TOOL_CONFIGURATION].messages).toEqual(
+      expectedPlacementMessages({
+        resourceLinkPlacements: [],
+        deepLinkPlacements: ['editor_button'],
+      }),
+    );
+  });
 
-    expect(messages).toEqual([
-      { type: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST },
-      {
-        type: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
-        target_link_uri: 'https://lti.local.test/lti/deep-linking',
-        label: 'My LTI Tool',
-        placements: ['editor_button'],
-        supported_types: ['ltiResourceLink'],
-      },
-    ]);
+  it.each([
+    {
+      platformName: 'Brightspace',
+      productFamilyCode: 'desire2learn',
+      config: createToolConfig({
+        platforms: {
+          brightspace: {
+            resourceLinkPlacements: ['course_tool'],
+            deepLinkPlacements: ['editor_button', 'quicklink'],
+          },
+        },
+      }),
+      expectedResourceLinkPlacements: ['course_tool'],
+      expectedDeepLinkPlacements: ['editor_button', 'quicklink'],
+    },
+    {
+      platformName: 'Moodle',
+      productFamilyCode: 'moodle',
+      config: createToolConfig({
+        platforms: {
+          moodle: {
+            resourceLinkPlacements: ['course_tool'],
+            deepLinkPlacements: ['editor_button', 'activity_chooser'],
+          },
+        },
+      }),
+      expectedResourceLinkPlacements: ['course_tool'],
+      expectedDeepLinkPlacements: ['editor_button', 'activity_chooser'],
+    },
+    {
+      platformName: 'Sakai',
+      productFamilyCode: 'sakailms.org',
+      config: createToolConfig({
+        platforms: {
+          sakai: {
+            resourceLinkPlacements: ['sakai_resource'],
+            deepLinkPlacements: ['editor_button', 'sakai_content_picker'],
+          },
+        },
+      }),
+      expectedResourceLinkPlacements: ['sakai_resource'],
+      expectedDeepLinkPlacements: ['editor_button', 'sakai_content_picker'],
+    },
+  ])('uses $platformName placement configuration', async (scenario) => {
+    const { requestBody } = await completeRegistrationAndCapturePayload({
+      productFamilyCode: scenario.productFamilyCode,
+      config: scenario.config,
+      services: ['deep_linking'],
+    });
+
+    expect(requestBody[LTI_CLAIM_TOOL_CONFIGURATION].messages).toEqual(
+      expectedPlacementMessages({
+        resourceLinkPlacements: scenario.expectedResourceLinkPlacements,
+        deepLinkPlacements: scenario.expectedDeepLinkPlacements,
+      }),
+    );
   });
 
   it('uses the Canvas profile to add Canvas-specific fields and configurable placements', async () => {
-    const storage = createStorageMock();
-    const logger = { debug: vi.fn(), error: vi.fn() } as any;
-    const service = new DynamicRegistrationService(
-      storage,
-      {
-        url: 'https://lti.local.test',
-        name: 'My LTI Tool',
+    const { requestBody } = await completeRegistrationAndCapturePayload({
+      productFamilyCode: 'canvas',
+      baseUrl: 'https://canvas.example',
+      config: createToolConfig({
         platforms: {
           canvas: {
-            clientUri: 'https://lti.local.test',
+            clientUri: TOOL_URL,
             privacyLevel: 'public',
             toolId: 'canvas-tool-123',
             vendor: 'Acme Learning',
@@ -310,41 +455,12 @@ describe('DynamicRegistrationService', () => {
             deepLinkPlacements: ['editor_button', 'assignment_selection'],
           },
         },
-      },
-      logger,
-    );
-
-    const sessionToken = 'session-token-123';
-    (storage.getRegistrationSession as any).mockResolvedValue({
-      openIdConfiguration: createOpenIdConfiguration({
-        productFamilyCode: 'canvas',
-        baseUrl: 'https://canvas.example',
       }),
-      registrationToken: 'reg-token-123',
-      expiresAt: Date.now() + 10_000,
-    });
-    (storage.addClient as any).mockResolvedValue('client-record-id');
-    (storage.addDeployment as any).mockResolvedValue('deployment-record-id');
-
-    global.fetch = vi.fn(
-      () =>
-        new Response(JSON.stringify(createRegistrationResponse('canvas-client-id')), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-    ) as any;
-
-    const form: DynamicRegistrationForm = {
-      sessionToken,
+      registrationResponse: createRegistrationResponse('canvas-client-id'),
       services: ['deep_linking'],
-    };
-    await service.completeDynamicRegistration(form);
+    });
 
-    const fetchCall = (global.fetch as any).mock.calls[0] as [string, RequestInit];
-    const requestBody = JSON.parse(fetchCall[1].body as string);
-    const messages = requestBody[LTI_CLAIM_TOOL_CONFIGURATION].messages;
-
-    expect(requestBody.client_uri).toBe('https://lti.local.test');
+    expect(requestBody.client_uri).toBe(TOOL_URL);
     expect(
       requestBody[LTI_CLAIM_TOOL_CONFIGURATION][
         'https://canvas.instructure.com/lti/privacy_level'
@@ -363,27 +479,94 @@ describe('DynamicRegistrationService', () => {
     expect(requestBody[LTI_CLAIM_TOOL_CONFIGURATION].secondary_domains).toEqual([
       'cdn.lti.local.test',
     ]);
-    expect(messages).toEqual([
-      {
-        type: LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
-        label: 'My LTI Tool',
-        target_link_uri: 'https://lti.local.test/lti/launch',
-        placements: ['course_navigation', 'link_selection'],
-      },
-      {
-        type: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
-        target_link_uri: 'https://lti.local.test/lti/deep-linking',
-        label: 'My LTI Tool',
-        placements: ['editor_button'],
-        supported_types: ['ltiResourceLink'],
-      },
-      {
-        type: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
-        target_link_uri: 'https://lti.local.test/lti/deep-linking',
-        label: 'My LTI Tool',
-        placements: ['assignment_selection'],
-        supported_types: ['ltiResourceLink'],
-      },
-    ]);
+    expect(requestBody[LTI_CLAIM_TOOL_CONFIGURATION].messages).toEqual(
+      expectedPlacementMessages({
+        resourceLinkPlacements: ['course_navigation', 'link_selection'],
+        deepLinkPlacements: ['editor_button', 'assignment_selection'],
+      }),
+    );
+  });
+
+  it('applies message and payload customization after profile defaults', async () => {
+    const { requestBody } = await completeRegistrationAndCapturePayload({
+      productFamilyCode: 'moodle',
+      baseUrl: 'https://moodle.example',
+      config: createToolConfig({
+        platforms: {
+          moodle: {
+            deepLinkPlacements: ['editor_button'],
+          },
+        },
+        customizeMessages: (context, messages) => [
+          ...messages,
+          {
+            type: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+            target_link_uri: context.deepLinkingUri,
+            label: `${context.toolName} Custom Picker`,
+            placements: ['custom_picker'],
+            supported_types: ['ltiResourceLink'],
+          },
+        ],
+        customizePayload: (context, payload) => ({
+          ...payload,
+          client_name:
+            context.appState === 'tenant-a'
+              ? `${payload.client_name} Tenant A`
+              : payload.client_name,
+          [LTI_CLAIM_TOOL_CONFIGURATION]: {
+            ...payload[LTI_CLAIM_TOOL_CONFIGURATION],
+            custom_parameters: {
+              tenant: context.appState === 'tenant-a' ? 'tenant-a' : 'unknown',
+            },
+          },
+        }),
+      }),
+      registrationResponse: createRegistrationResponse('moodle-client-id'),
+      services: ['deep_linking'],
+      session: { appState: 'tenant-a' },
+    });
+
+    expect(requestBody.client_name).toBe('My LTI Tool Tenant A');
+    expect(requestBody[LTI_CLAIM_TOOL_CONFIGURATION].custom_parameters).toEqual({
+      tenant: 'tenant-a',
+    });
+    expect(requestBody[LTI_CLAIM_TOOL_CONFIGURATION].messages).toContainEqual({
+      type: LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
+      target_link_uri: `${TOOL_URL}/lti/deep-linking`,
+      label: 'My LTI Tool Custom Picker',
+      placements: ['custom_picker'],
+      supported_types: ['ltiResourceLink'],
+    });
+  });
+
+  it('rejects invalid customized payloads before posting to the platform', async () => {
+    const storage = createStorageMock();
+    const service = createService({
+      storage,
+      config: createToolConfig({
+        customizePayload: (_context, payload) => ({
+          ...payload,
+          initiate_login_uri: 'not-a-url',
+        }),
+      }),
+    });
+
+    vi.mocked(storage.getRegistrationSession).mockResolvedValue({
+      openIdConfiguration: createOpenIdConfiguration({
+        productFamilyCode: 'blackboard',
+        baseUrl: 'https://blackboard.example',
+      }),
+      registrationToken: 'reg-token-123',
+      expiresAt: Date.now() + 10_000,
+    });
+    const fetchMock = mockJsonFetch(createRegistrationResponse('blackboard-client-id'));
+
+    await expect(
+      service.completeDynamicRegistration({
+        sessionToken: SESSION_TOKEN,
+        services: [],
+      }),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

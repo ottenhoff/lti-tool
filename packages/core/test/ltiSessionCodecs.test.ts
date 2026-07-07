@@ -61,6 +61,10 @@ const sampleDynamicRegistrationSession = () => ({
     },
   },
   registrationToken: 'registration-token-123',
+  appState: {
+    tenantId: 'tenant-1',
+    returnPath: '/admin/lti',
+  },
   expiresAt: Date.now() + 600_000,
 });
 

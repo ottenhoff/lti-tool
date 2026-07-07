@@ -6,7 +6,7 @@ import { LTI_CLAIM_PLATFORM_CONFIGURATION } from '../../../constants.js';
  * Zod schema for LTI platform-specific configuration within OpenID Connect Discovery.
  * Contains LTI-specific metadata about the platform's capabilities and supported features.
  *
- * @property product_family_code - Platform identifier (e.g., 'moodle', 'canvas', 'sakai')
+ * @property product_family_code - Platform identifier (for example, 'canvas', 'desire2learn', 'moodle', or 'sakailms.org')
  * @property version - Platform version string
  * @property messages_supported - Array of LTI message types the platform supports
  * @property variables - Optional array of custom variable names the platform supports

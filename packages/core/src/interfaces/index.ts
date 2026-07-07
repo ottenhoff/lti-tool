@@ -1,6 +1,15 @@
 export type { JWKS } from './jwks.js';
 export type { LTIClient } from './ltiClient.js';
-export type { LTIConfig } from './ltiConfig.js';
+export type {
+  CanvasDynamicRegistrationConfig,
+  DynamicRegistrationConfig,
+  DynamicRegistrationCustomizationContext,
+  DynamicRegistrationPlatformConfig,
+  DynamicRegistrationPlatformKey,
+  DynamicRegistrationPlatformsConfig,
+  LTIConfig,
+  PlatformDynamicRegistrationConfig,
+} from './ltiConfig.js';
 export type { LTIDeployment } from './ltiDeployment.js';
 export type { LTIDynamicRegistrationSession } from './ltiDynamicRegistrationSession.js';
 export type { LTILaunchConfig } from './ltiLaunchConfig.js';

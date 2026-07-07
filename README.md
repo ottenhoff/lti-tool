@@ -9,7 +9,7 @@ Built on [lti-tool/lti-tool](https://github.com/lti-tool/lti-tool).
 
 ## What this is
 
-An LMS (Canvas, Moodle, Sakai, Blackboard, and others) launches your application inside an iframe using LTI 1.3. That launch is an OIDC login flow: the platform redirects the browser to your tool, your tool redirects back to the platform, and the platform posts a signed ID token to your launch endpoint. Your tool verifies that token, learns who the user is and which course they came from, and then serves content.
+An LMS (Canvas, Brightspace, Moodle, Sakai, Blackboard, and others) launches your application inside an iframe using LTI 1.3. That launch is an OIDC login flow: the platform redirects the browser to your tool, your tool redirects back to the platform, and the platform posts a signed ID token to your launch endpoint. Your tool verifies that token, learns who the user is and which course they came from, and then serves content.
 
 LTI Tool handles that protocol work so you can focus on your application:
 
@@ -196,6 +196,7 @@ this hook.
 Mount deep linking or dynamic registration explicitly when you need them:
 
 ```typescript
+import { LtiDynamicRegistration } from '@longsightgroup/lti-tool';
 import {
   completeDynamicRegistrationRouteHandler,
   createLtiOptionalRouteDeps,
@@ -203,7 +204,18 @@ import {
   initiateDynamicRegistrationRouteHandler,
 } from '@longsightgroup/lti-tool/hono';
 
-const optionalRoutes = createLtiOptionalRouteDeps({ ltiTool, logger });
+const dynamicRegistration = new LtiDynamicRegistration(ltiConfig);
+const optionalRoutes = createLtiOptionalRouteDeps({
+  ltiTool,
+  dynamicRegistration,
+  logger,
+  getDynamicRegistrationAppState: ({ hono }) => ({
+    tenantId: hono.req.query('tenantId') ?? 'default',
+  }),
+  onRegistrationComplete: async ({ client, deployment, appState }) => {
+    await saveTenantRegistration({ client, deployment, appState });
+  },
+});
 
 app.get('/lti/deep-linking', deepLinkRouteHandler(optionalRoutes.deepLink));
 app.get(
@@ -262,6 +274,58 @@ Applications and tests can depend on the exported small interfaces:
 `LtiDeepLinkingClient`.
 
 Use `LtiDynamicRegistration` for administrator self-service registration.
+
+Dynamic registration can be customized per platform while keeping the same package
+entry point. Canvas, Brightspace, Moodle, and Sakai support placement configuration;
+final hooks can adjust the resolved messages or payload before the request is posted
+to the LMS.
+
+```typescript
+const ltiConfig = {
+  // stateSecret, keyPair, storage...
+  dynamicRegistration: {
+    url: 'https://tool.example.com',
+    name: 'Example Tool',
+    platforms: {
+      canvas: {
+        resourceLinkPlacements: ['course_navigation'],
+        deepLinkPlacements: ['editor_button', 'assignment_selection'],
+        privacyLevel: 'public',
+        toolId: 'example-tool',
+      },
+      brightspace: {
+        deepLinkPlacements: ['editor_button'],
+      },
+      moodle: {
+        deepLinkPlacements: ['editor_button', 'activity_chooser'],
+      },
+      sakai: {
+        deepLinkPlacements: ['editor_button'],
+      },
+    },
+    customizeMessages: (_context, messages) => messages,
+    customizePayload: (_context, payload) => ({
+      ...payload,
+      client_uri: 'https://tool.example.com/admin/lti',
+    }),
+  },
+};
+```
+
+`appState` values passed to `initiateDynamicRegistration` or returned from Hono
+`getDynamicRegistrationAppState` are stored with the temporary registration session
+and returned in `LtiDynamicRegistrationCompletionResult`. They must be JSON values.
+Define your own Zod schema in application code when you need typed customization hooks.
+
+`platforms` is keyed by built-in profile key (`canvas`, `brightspace`, `moodle`,
+or `sakai`). Add the key to the public config type and built-in profile table when
+you need first-class support for a new LMS.
+
+The Hono `onRegistrationComplete` callback runs after core stores the client,
+deployment, and launch config. If the callback throws, the route logs the failure
+and still returns the registration success HTML. The LMS registration has already
+succeeded at that point, so applications should treat callback failures as requiring
+reconciliation.
 
 Service availability depends on what the platform enabled for the deployment. Helper functions like `isLtiAgsAvailable` and `isLtiNrpsAvailable` inspect the session claims.
 

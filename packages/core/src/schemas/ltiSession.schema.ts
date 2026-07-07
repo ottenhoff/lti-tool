@@ -1,5 +1,6 @@
 import * as z from 'zod';
 
+import { DynamicRegistrationAppStateSchema } from './lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
 import { openIDConfigurationSchema } from './lti13/dynamicRegistration/openIDConfiguration.schema.js';
 import { LTI13JwtPayloadSchema } from './lti13/lti13JwtPayload.schema.js';
 
@@ -82,5 +83,6 @@ export const LTISessionSchema = z.object({
 export const LTIDynamicRegistrationSessionSchema = z.object({
   openIdConfiguration: openIDConfigurationSchema,
   registrationToken: z.string().optional(),
+  appState: DynamicRegistrationAppStateSchema.optional(),
   expiresAt: z.number(),
 });

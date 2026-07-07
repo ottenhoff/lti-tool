@@ -9,6 +9,7 @@ import type { OpenIDConfiguration } from './schemas/lti13/dynamicRegistration/op
 import {
   DynamicRegistrationService,
   type LtiDynamicRegistrationCompletionResult,
+  type LtiDynamicRegistrationInitiationOptions,
 } from './services/dynamicRegistration.service.js';
 import { createNoopLogger } from './utils/noopLogger.js';
 
@@ -50,9 +51,10 @@ export class LtiDynamicRegistration {
   async initiateDynamicRegistration(
     registrationRequest: RegistrationRequest,
     requestPath: string,
+    options?: LtiDynamicRegistrationInitiationOptions,
   ): Promise<LtiServiceResult<string>> {
     return await this.withService('initiateDynamicRegistration', (service) =>
-      service.initiateDynamicRegistration(registrationRequest, requestPath),
+      service.initiateDynamicRegistration(registrationRequest, requestPath, options),
     );
   }
 

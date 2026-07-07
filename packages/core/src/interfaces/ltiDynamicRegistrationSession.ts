@@ -1,3 +1,4 @@
+import type { DynamicRegistrationAppState } from '../schemas/lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
 import type { OpenIDConfiguration } from '../schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
 
 /**
@@ -9,6 +10,8 @@ export interface LTIDynamicRegistrationSession {
   openIdConfiguration: OpenIDConfiguration;
   /** Registration token provided by the platform for this registration attempt */
   registrationToken?: string;
+  /** JSON-serializable app-owned state carried to registration completion */
+  appState?: DynamicRegistrationAppState;
   /** Unix timestamp (milliseconds) when this session expires and should be cleaned up */
   expiresAt: number;
 }

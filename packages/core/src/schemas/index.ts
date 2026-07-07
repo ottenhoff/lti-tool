@@ -9,6 +9,10 @@ export {
   type DeepLinkingLtiResourceLink,
 } from './lti13/deepLinking/contentItem.schema.js';
 export {
+  DynamicRegistrationAppStateSchema,
+  type DynamicRegistrationAppState,
+} from './lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
+export {
   DynamicRegistrationFormSchema,
   type DynamicRegistrationForm,
 } from './lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';

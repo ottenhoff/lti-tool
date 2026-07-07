@@ -307,7 +307,14 @@ export class MemoryStorage implements LTIStorage {
     session: LTIDynamicRegistrationSession,
   ): Promise<void> {
     this.registrationSessions.set(sessionId, session);
-    this.logger.debug({ sessionId, session }, 'registration session stored');
+    this.logger.debug(
+      {
+        sessionId,
+        expiresAt: session.expiresAt,
+        hasAppState: session.appState !== undefined,
+      },
+      'registration session stored',
+    );
   }
 
   // oxlint-disable-next-line require-await

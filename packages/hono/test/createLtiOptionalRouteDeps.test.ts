@@ -35,9 +35,13 @@ describe('createLtiOptionalRouteDeps', () => {
 
   it('binds optional route deps from protocol facades', async () => {
     const ltiTool = new LTITool(config);
+    const getDynamicRegistrationAppState = () => ({ tenantId: 'tenant-1' });
+    const onRegistrationComplete = () => undefined;
     const deps = createLtiOptionalRouteDeps({
       ltiTool,
       dynamicRegistration: new LtiDynamicRegistration(config),
+      getDynamicRegistrationAppState,
+      onRegistrationComplete,
     });
 
     await expect(deps.deepLink.getSession('missing-session')).resolves.toBeUndefined();
@@ -50,6 +54,12 @@ describe('createLtiOptionalRouteDeps', () => {
     expect(deps.deepLink.logger).toBe(deps.initiateDynamicRegistration.logger);
     expect(deps.initiateDynamicRegistration.logger).toBe(
       deps.completeDynamicRegistration.logger,
+    );
+    expect(deps.initiateDynamicRegistration.getDynamicRegistrationAppState).toBe(
+      getDynamicRegistrationAppState,
+    );
+    expect(deps.completeDynamicRegistration.onRegistrationComplete).toBe(
+      onRegistrationComplete,
     );
   });
 });

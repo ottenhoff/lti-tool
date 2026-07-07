@@ -1,7 +1,19 @@
+import type { DynamicRegistrationAppState } from '../schemas/lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
+import type { LTIMessage } from '../schemas/lti13/dynamicRegistration/ltiMessages.schema.js';
+import type { OpenIDConfiguration } from '../schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
+import type { ToolRegistrationPayload } from '../schemas/lti13/dynamicRegistration/toolRegistrationPayload.schema.js';
+
 import type { LtiLogger } from './ltiLogger.js';
 import type { LTIStorage } from './ltiStorage.js';
 
-export interface CanvasDynamicRegistrationConfig {
+export interface PlatformDynamicRegistrationConfig {
+  /** Optional resource-link placements to expose during registration */
+  resourceLinkPlacements?: string[];
+  /** Optional deep-link placements to expose during registration */
+  deepLinkPlacements?: string[];
+}
+
+export interface CanvasDynamicRegistrationConfig extends PlatformDynamicRegistrationConfig {
   /** Optional Canvas-specific privacy level for launches */
   privacyLevel?: 'public' | 'name_only' | 'email_only' | 'anonymous';
   /** Optional Canvas-specific stable identifier for correlating tool deployments */
@@ -12,10 +24,44 @@ export interface CanvasDynamicRegistrationConfig {
   clientUri?: string;
   /** Optional secondary domains included in the Canvas tool configuration */
   secondaryDomains?: string[];
-  /** Optional Canvas resource-link placements to expose during registration */
-  resourceLinkPlacements?: string[];
-  /** Optional Canvas deep-link placements; defaults to the common Canvas set when omitted */
-  deepLinkPlacements?: string[];
+}
+
+export type DynamicRegistrationPlatformConfig =
+  | CanvasDynamicRegistrationConfig
+  | PlatformDynamicRegistrationConfig;
+
+export interface DynamicRegistrationPlatformsConfig {
+  /** Canvas-specific registration settings */
+  canvas?: CanvasDynamicRegistrationConfig;
+  /** Brightspace-specific placement settings */
+  brightspace?: PlatformDynamicRegistrationConfig;
+  /** Moodle-specific placement settings */
+  moodle?: PlatformDynamicRegistrationConfig;
+  /** Sakai-specific placement settings */
+  sakai?: PlatformDynamicRegistrationConfig;
+}
+
+export type DynamicRegistrationPlatformKey = keyof DynamicRegistrationPlatformsConfig;
+
+export interface DynamicRegistrationCustomizationContext {
+  /** Platform OpenID configuration used for this registration attempt */
+  openIdConfiguration: OpenIDConfiguration;
+  /** LTI Advantage service keys selected by the administrator */
+  selectedServices: string[];
+  /** Tool Deep Linking endpoint included in the registration payload */
+  deepLinkingUri: string;
+  /** Tool launch endpoint included in the registration payload */
+  launchUri: string;
+  /** Tool OIDC login endpoint included in the registration payload */
+  loginUri: string;
+  /** Tool JWKS endpoint included in the registration payload */
+  jwksUri: string;
+  /** Display name configured for the tool */
+  toolName: string;
+  /** JSON-serializable app-owned state from registration initiation */
+  appState?: DynamicRegistrationAppState;
+  /** Platform-specific registration config resolved for the current platform, when configured */
+  platformConfig?: DynamicRegistrationPlatformConfig;
 }
 
 /** Dynamic registration configuration for LTI 1.3 tool registration */
@@ -38,11 +84,18 @@ export interface DynamicRegistrationConfig {
   launchUri?: string;
   /** Optional custom JWKS endpoint (defaults to {url}/lti/jwks) */
   jwksUri?: string;
-  /** Optional platform-specific dynamic registration extensions */
-  platforms?: {
-    /** Optional Canvas-specific registration settings */
-    canvas?: CanvasDynamicRegistrationConfig;
-  };
+  /** Optional platform-specific dynamic registration extensions keyed by built-in profile key */
+  platforms?: DynamicRegistrationPlatformsConfig;
+  /** Final message customization hook applied after platform profile defaults */
+  customizeMessages?: (
+    context: DynamicRegistrationCustomizationContext,
+    messages: LTIMessage[],
+  ) => LTIMessage[];
+  /** Final payload customization hook applied after platform profile transforms */
+  customizePayload?: (
+    context: DynamicRegistrationCustomizationContext,
+    payload: ToolRegistrationPayload,
+  ) => ToolRegistrationPayload;
 }
 
 /**

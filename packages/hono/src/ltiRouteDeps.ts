@@ -1,7 +1,10 @@
 import type {
+  DynamicRegistrationAppState,
   DynamicRegistrationForm,
   JWKS,
   LtiDynamicRegistration,
+  LtiDynamicRegistrationCompletionResult,
+  LtiDynamicRegistrationInitiationOptions,
   LtiLaunchVerificationResult,
   LtiLogger,
   LtiToolPort,
@@ -9,6 +12,7 @@ import type {
   LTISession,
   RegistrationRequest,
 } from '@longsightgroup/lti-tool';
+import type { Context } from 'hono';
 
 export type LtiJwksRouteDeps = {
   getJWKS: () => Promise<JWKS>;
@@ -35,7 +39,15 @@ export type LtiInitiateDynamicRegistrationRouteDeps = {
   initiateDynamicRegistration: (
     request: RegistrationRequest,
     routePath: string,
+    options?: LtiDynamicRegistrationInitiationOptions,
   ) => ReturnType<LtiDynamicRegistration['initiateDynamicRegistration']>;
+  getDynamicRegistrationAppState?: (context: {
+    hono: Context;
+    registrationRequest: RegistrationRequest;
+  }) =>
+    | DynamicRegistrationAppState
+    | undefined
+    | Promise<DynamicRegistrationAppState | undefined>;
   logger: LtiLogger;
 };
 
@@ -43,6 +55,10 @@ export type LtiCompleteDynamicRegistrationRouteDeps = {
   completeDynamicRegistration: (
     form: DynamicRegistrationForm,
   ) => ReturnType<LtiDynamicRegistration['completeDynamicRegistration']>;
+  /** Runs after core stores the registration. Failures are logged and do not change the success response. */
+  onRegistrationComplete?: (
+    result: LtiDynamicRegistrationCompletionResult,
+  ) => void | Promise<void>;
   logger: LtiLogger;
 };
 

@@ -144,6 +144,12 @@ const optionalRoutes = createLtiOptionalRouteDeps({
   ltiTool,
   dynamicRegistration,
   logger,
+  getDynamicRegistrationAppState: ({ hono }) => ({
+    tenantId: hono.req.query('tenantId') ?? 'default',
+  }),
+  onRegistrationComplete: async ({ client, deployment, appState }) => {
+    await saveTenantRegistration({ client, deployment, appState });
+  },
 });
 
 app.get('/lti/deep-linking', deepLinkRouteHandler(optionalRoutes.deepLink));
@@ -156,6 +162,13 @@ app.post(
   completeDynamicRegistrationRouteHandler(optionalRoutes.completeDynamicRegistration),
 );
 ```
+
+`getDynamicRegistrationAppState` stores JSON-serializable app state in the temporary
+registration session. `onRegistrationComplete` runs after core stores the client,
+deployment, and launch config, and receives the same `appState` on the completion
+result. If the callback throws, the route logs the failure and still returns the
+registration success HTML. The LMS registration has already succeeded at that point,
+so applications should treat callback failures as requiring reconciliation.
 
 ### Individual route handlers
 

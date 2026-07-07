@@ -24,7 +24,16 @@ export function initiateDynamicRegistrationRouteHandler(
     try {
       const queryData = c.req.query();
       const validated = RegistrationRequestSchema.parse(queryData);
-      const result = await deps.initiateDynamicRegistration(validated, c.req.path);
+      const appState = await deps.getDynamicRegistrationAppState?.({
+        hono: c,
+        registrationRequest: validated,
+      });
+      const initiationOptions = appState === undefined ? undefined : { appState };
+      const result = await deps.initiateDynamicRegistration(
+        validated,
+        c.req.path,
+        initiationOptions,
+      );
       if (!result.success) {
         deps.logger.error(
           { error: result.error, path: c.req.path },
@@ -78,6 +87,15 @@ export function completeDynamicRegistrationRouteHandler(
         return c.json(
           { error: dynamicRegistrationErrorMessage(result.error) },
           dynamicRegistrationErrorStatus(result.error),
+        );
+      }
+
+      try {
+        await deps.onRegistrationComplete?.(result.data);
+      } catch (error) {
+        deps.logger.error(
+          { error, path: c.req.path },
+          'lti dynamic registration completion callback failed',
         );
       }
 
