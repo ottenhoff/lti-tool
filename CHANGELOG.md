@@ -8,6 +8,7 @@
 - Add `acceptLineItem`, `title`, and `text` to the exported `LtiDeepLinkingSettings` session/capability contract.
 - Fix Deep Linking `ltiResourceLink.lineItem` parsing so `label` is optional, `scoreMaximum` must be positive, and `gradesReleased` is preserved.
 - Preserve Deep Linking `window` and `iframe` presentation options for `link` and `ltiResourceLink` content items.
+- Preserve JSON extension properties on built-in Deep Linking content items and allow custom extension content item types.
 
 ## 0.1.3
 

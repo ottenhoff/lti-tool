@@ -6,7 +6,7 @@ import {
   createLtiResourceLinkContentItem,
 } from '../src/index.js';
 
-describe('Deep Linking content item builders', () => {
+describe('Deep Linking content items', () => {
   it('builds a minimal ltiResourceLink content item', () => {
     expect(createLtiResourceLinkContentItem({ title: 'Launch activity' })).toEqual({
       type: 'ltiResourceLink',
@@ -129,6 +129,58 @@ describe('Deep Linking content item builders', () => {
         height: 480,
       },
     });
+  });
+
+  it('preserves extension properties on built-in content items', () => {
+    const platformExtensionProperty =
+      'https://platform.example.com/spec/lti-dl/displayMode';
+    const parsed = ContentItemSchema.parse({
+      type: 'link',
+      url: 'https://tool.example.com/content',
+      [platformExtensionProperty]: {
+        mode: 'reader',
+      },
+    });
+
+    expect(parsed).toEqual({
+      type: 'link',
+      url: 'https://tool.example.com/content',
+      [platformExtensionProperty]: {
+        mode: 'reader',
+      },
+    });
+  });
+
+  it('accepts custom extension content item types', () => {
+    const parsed = ContentItemSchema.parse({
+      type: 'https://platform.example.com/spec/lti-dl/rubric',
+      title: 'Rubric',
+      'https://platform.example.com/spec/lti-dl/rubricId': 'rubric-123',
+    });
+
+    expect(parsed).toEqual({
+      type: 'https://platform.example.com/spec/lti-dl/rubric',
+      title: 'Rubric',
+      'https://platform.example.com/spec/lti-dl/rubricId': 'rubric-123',
+    });
+  });
+
+  it('does not treat invalid built-in content items as custom extension items', () => {
+    expect(() =>
+      ContentItemSchema.parse({
+        type: 'link',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects non-json extension property values', () => {
+    expect(() =>
+      ContentItemSchema.parse({
+        type: 'link',
+        url: 'https://tool.example.com/content',
+        'https://platform.example.com/spec/lti-dl/displayMode': undefined,
+      }),
+    ).toThrow();
   });
 
   it('rejects non-positive ltiResourceLink score maximum values', () => {

@@ -1,6 +1,7 @@
 export { SessionIdSchema } from './common.schema.js';
 export {
   ContentItemSchema,
+  type DeepLinkingCustomContentItem,
   type DeepLinkingContentItem,
   type DeepLinkingFile,
   type DeepLinkingHtml,

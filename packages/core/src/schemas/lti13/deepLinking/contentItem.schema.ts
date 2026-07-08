@@ -1,5 +1,14 @@
 import * as z from 'zod';
 
+const knownContentItemTypes = new Set([
+  'ltiResourceLink',
+  'link',
+  'html',
+  'file',
+  'image',
+]);
+const ContentItemExtensionValueSchema = z.json();
+
 /**
  * Zod schema for base content item properties shared across all content item types.
  * Contains common metadata fields like title, text, icon, and thumbnail.
@@ -11,24 +20,26 @@ import * as z from 'zod';
  *
  * @see https://www.imsglobal.org/spec/lti-dl/v2p0#content-item-types
  */
-const BaseContentItemSchema = z.object({
-  title: z.string().optional(),
-  text: z.string().optional(),
-  icon: z
-    .object({
-      url: z.url(),
-      width: z.number().optional(),
-      height: z.number().optional(),
-    })
-    .optional(),
-  thumbnail: z
-    .object({
-      url: z.url(),
-      width: z.number().optional(),
-      height: z.number().optional(),
-    })
-    .optional(),
-});
+const BaseContentItemSchema = z
+  .object({
+    title: z.string().optional(),
+    text: z.string().optional(),
+    icon: z
+      .object({
+        url: z.url(),
+        width: z.number().optional(),
+        height: z.number().optional(),
+      })
+      .optional(),
+    thumbnail: z
+      .object({
+        url: z.url(),
+        width: z.number().optional(),
+        height: z.number().optional(),
+      })
+      .optional(),
+  })
+  .catchall(ContentItemExtensionValueSchema);
 
 const WindowTargetSchema = z.object({
   targetName: z.string().optional(),
@@ -165,18 +176,46 @@ export const ImageSchema = BaseContentItemSchema.extend({
 });
 
 /**
- * Zod schema for validating any Deep Linking content item type.
+ * Zod schema for validating built-in Deep Linking content item types.
  * Uses discriminated union on the 'type' field to determine the specific content item schema.
  * Supports: ltiResourceLink, link, html, file, and image content types.
  *
  * @see https://www.imsglobal.org/spec/lti-dl/v2p0#content-item-types
  */
-export const ContentItemSchema = z.discriminatedUnion('type', [
+const KnownContentItemSchema = z.discriminatedUnion('type', [
   LtiResourceLinkSchema,
   LinkSchema,
   HtmlSchema,
   FileSchema,
   ImageSchema,
+]);
+
+/**
+ * Zod schema for validating custom Deep Linking extension content item types.
+ * Built-in item types are excluded so invalid built-in items cannot fall through as custom items.
+ *
+ * @see https://www.imsglobal.org/spec/lti-dl/v2p0#content-item-types
+ */
+export const CustomContentItemSchema = z
+  .object({
+    type: z
+      .string()
+      .refine(
+        (type) => !knownContentItemTypes.has(type),
+        'Custom content item type must not match a built-in content item type',
+      ),
+  })
+  .catchall(ContentItemExtensionValueSchema);
+
+/**
+ * Zod schema for validating any Deep Linking content item type.
+ * Supports built-in content items and custom extension content items.
+ *
+ * @see https://www.imsglobal.org/spec/lti-dl/v2p0#content-item-types
+ */
+export const ContentItemSchema = z.union([
+  KnownContentItemSchema,
+  CustomContentItemSchema,
 ]);
 
 /**
@@ -210,7 +249,13 @@ export type DeepLinkingFile = z.infer<typeof FileSchema>;
 export type DeepLinkingImage = z.infer<typeof ImageSchema>;
 
 /**
+ * Type representing a validated custom Deep Linking content item.
+ * Used for content item types defined by other specifications or platform extensions.
+ */
+export type DeepLinkingCustomContentItem = z.infer<typeof CustomContentItemSchema>;
+
+/**
  * Type representing any validated Deep Linking content item.
- * Can be any of: DeepLinkingLtiResourceLink, DeepLinkingLink, DeepLinkingHtml, DeepLinkingFile, or DeepLinkingImage.
+ * Can be a built-in Deep Linking content item or a custom extension item.
  */
 export type DeepLinkingContentItem = z.infer<typeof ContentItemSchema>;
