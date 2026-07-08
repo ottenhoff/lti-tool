@@ -247,7 +247,10 @@ describe('createSession', () => {
         accept_types: ['link', 'file'],
         accept_presentation_document_targets: ['iframe', 'window'],
         accept_media_types: 'image/*,text/html',
+        accept_lineitem: true,
         auto_create: true,
+        title: 'Default item title',
+        text: 'Default item text',
         data: 'custom_data_123',
       },
     });
@@ -261,7 +264,10 @@ describe('createSession', () => {
       acceptPresentationDocumentTargets: ['iframe', 'window'],
       acceptMediaTypes: 'image/*,text/html',
       acceptMultiple: false,
+      acceptLineItem: true,
       autoCreate: true,
+      title: 'Default item title',
+      text: 'Default item text',
       data: 'custom_data_123',
     });
   });

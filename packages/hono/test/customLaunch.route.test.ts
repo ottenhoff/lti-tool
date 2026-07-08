@@ -179,13 +179,14 @@ describe('customLaunchRouteHandler', () => {
         [LTI_CLAIM_DEEP_LINKING_SETTINGS]: {
           deep_link_return_url: 'https://platform.example.com/deep-link-return',
           accept_types: ['ltiResourceLink'],
+          accept_presentation_document_targets: ['iframe'],
         },
       }),
       services: {
         deepLinking: {
           returnUrl: 'https://platform.example.com/deep-link-return',
           acceptTypes: ['ltiResourceLink'],
-          acceptPresentationDocumentTargets: [],
+          acceptPresentationDocumentTargets: ['iframe'],
           acceptMultiple: false,
           autoCreate: false,
         },

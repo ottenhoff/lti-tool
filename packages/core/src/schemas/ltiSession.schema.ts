@@ -56,7 +56,10 @@ export const LTISessionServicesSchema = z.object({
       acceptPresentationDocumentTargets: z.array(z.string()),
       acceptMediaTypes: z.string().optional(),
       acceptMultiple: z.boolean(),
+      acceptLineItem: z.boolean().optional(),
       autoCreate: z.boolean(),
+      title: z.string().optional(),
+      text: z.string().optional(),
       data: z.string().optional(),
     })
     .optional(),

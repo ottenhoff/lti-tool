@@ -39,8 +39,18 @@ export interface LtiDeepLinkingServiceCapabilities {
   readonly acceptMediaTypes?: string;
   /** Whether the platform accepts multiple returned content items. */
   readonly acceptMultiple: boolean;
+  /**
+   * Whether the platform supports line items in returned LTI Resource Link items.
+   *
+   * Absence means the platform did not advertise a line item policy.
+   */
+  readonly acceptLineItem?: boolean;
   /** Whether the platform requests automatic item creation. */
   readonly autoCreate: boolean;
+  /** Default title advertised for returned content items. */
+  readonly title?: string;
+  /** Default visible text advertised for returned content items. */
+  readonly text?: string;
   /** Platform-specific opaque data that should be returned in the Deep Linking response. */
   readonly data?: string;
 }
@@ -98,7 +108,16 @@ export function resolveLtiServiceCapabilities(
         ? {}
         : { acceptMediaTypes: deepLinkingService.acceptMediaTypes }),
       acceptMultiple: deepLinkingService?.acceptMultiple ?? false,
+      ...(deepLinkingService?.acceptLineItem === undefined
+        ? {}
+        : { acceptLineItem: deepLinkingService.acceptLineItem }),
       autoCreate: deepLinkingService?.autoCreate ?? false,
+      ...(deepLinkingService?.title === undefined
+        ? {}
+        : { title: deepLinkingService.title }),
+      ...(deepLinkingService?.text === undefined
+        ? {}
+        : { text: deepLinkingService.text }),
       ...(deepLinkingService?.data === undefined
         ? {}
         : { data: deepLinkingService.data }),

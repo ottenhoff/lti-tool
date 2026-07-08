@@ -13,7 +13,10 @@ describe('Deep Linking settings helpers', () => {
       accept_presentation_document_targets: ['iframe', 'window'],
       accept_media_types: 'image/*,text/html',
       accept_multiple: true,
+      accept_lineitem: true,
       auto_create: true,
+      title: 'Default item title',
+      text: 'Default item text',
       data: 'custom_data_123',
     });
 
@@ -23,12 +26,28 @@ describe('Deep Linking settings helpers', () => {
       acceptPresentationDocumentTargets: ['iframe', 'window'],
       acceptMediaTypes: 'image/*,text/html',
       acceptMultiple: true,
+      acceptLineItem: true,
       autoCreate: true,
+      title: 'Default item title',
+      text: 'Default item text',
       data: 'custom_data_123',
     });
   });
 
-  it('defaults optional booleans to false', () => {
+  it('preserves explicit false line item support', () => {
+    const parsed = parseLtiDeepLinkingSettings({
+      deep_link_return_url: 'https://platform.example.com/deep_links',
+      accept_types: ['ltiResourceLink'],
+      accept_presentation_document_targets: ['iframe'],
+      accept_lineitem: false,
+    });
+
+    expect(parsed).toMatchObject({
+      acceptLineItem: false,
+    });
+  });
+
+  it('defaults optional booleans to false without assuming line item support', () => {
     const parsed = parseLtiDeepLinkingSettings({
       deep_link_return_url: 'https://platform.example.com/deep_links',
       accept_types: ['link'],
@@ -42,10 +61,22 @@ describe('Deep Linking settings helpers', () => {
       acceptMultiple: false,
       autoCreate: false,
     });
+    expect(parsed).not.toHaveProperty('acceptLineItem');
   });
 
   it('returns undefined when the claim is absent', () => {
     expect(parseLtiDeepLinkingSettings(undefined)).toBeUndefined();
+  });
+
+  it('rejects unknown Deep Linking settings keys', () => {
+    expect(() =>
+      parseLtiDeepLinkingSettings({
+        deep_link_return_url: 'https://platform.example.com/deep_links',
+        accept_types: ['ltiResourceLink'],
+        accept_presentation_document_targets: ['iframe'],
+        accept_line_item: true,
+      }),
+    ).toThrow();
   });
 
   it('validates accepted content types', () => {

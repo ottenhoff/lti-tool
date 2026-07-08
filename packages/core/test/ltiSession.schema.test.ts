@@ -47,6 +47,7 @@ const sampleLaunchPayload = (): LTI13JwtPayload => ({
   [LTI_CLAIM_DEEP_LINKING_SETTINGS]: {
     deep_link_return_url: 'https://platform.example.com/deep_links',
     accept_types: ['ltiResourceLink'],
+    accept_presentation_document_targets: ['iframe'],
   },
 });
 

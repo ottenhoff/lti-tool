@@ -1,5 +1,12 @@
 # @longsightgroup/lti-tool
 
+## 0.1.4
+
+### Patch Changes
+
+- Fix LTI Deep Linking settings parsing to follow the 1EdTech spec: include `accept_lineitem`, `title`, and `text`; require `accept_presentation_document_targets`; and reject unknown Deep Linking settings keys instead of silently dropping them.
+- Add `acceptLineItem`, `title`, and `text` to the exported `LtiDeepLinkingSettings` session/capability contract.
+
 ## 0.1.3
 
 ### Patch Changes

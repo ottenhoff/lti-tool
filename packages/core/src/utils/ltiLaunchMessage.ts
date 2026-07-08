@@ -11,16 +11,14 @@ import {
   LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
   LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
 } from '../constants.js';
+import type { LtiDeepLinkingSettings } from '../interfaces/ltiDeepLinkingSettings.js';
 import type { LTISession } from '../interfaces/ltiSession.js';
 import {
   LTI13JwtPayloadSchema,
   type LTI13JwtPayload,
 } from '../schemas/lti13/lti13JwtPayload.schema.js';
 
-import {
-  parseLtiDeepLinkingSettings,
-  type LtiDeepLinkingSettings,
-} from './deepLinkingSettings.js';
+import { parseLtiDeepLinkingSettings } from './deepLinkingSettings.js';
 import { classifyLtiRoles, simplifyLtiRoles, type LtiRoleKind } from './ltiRoles.js';
 
 export type LtiLaunchMessageResolutionErrorCode =

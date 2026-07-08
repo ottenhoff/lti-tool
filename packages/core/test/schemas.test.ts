@@ -459,8 +459,8 @@ describe('Schema Validation Tests', () => {
       expect(() => LTI13JwtPayloadSchema.parse(validPayload)).not.toThrow();
     });
 
-    it('accepts Deep Linking settings without presentation document targets', () => {
-      const validPayload = {
+    it('rejects Deep Linking settings without presentation document targets', () => {
+      const invalidPayload = {
         iss: 'https://platform.example.com',
         sub: 'user123',
         aud: 'client123',
@@ -477,7 +477,7 @@ describe('Schema Validation Tests', () => {
         },
       };
 
-      expect(() => LTI13JwtPayloadSchema.parse(validPayload)).not.toThrow();
+      expect(() => LTI13JwtPayloadSchema.parse(invalidPayload)).toThrow();
     });
   });
 

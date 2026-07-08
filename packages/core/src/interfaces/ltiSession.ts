@@ -1,5 +1,7 @@
 import type { JWTPayload } from 'jose';
 
+import type { LtiDeepLinkingSettings } from './ltiDeepLinkingSettings.js';
+
 /**
  * Represents an active LTI session containing user information, context data,
  * and available services after successful launch verification.
@@ -82,22 +84,7 @@ export interface LTISession {
       versions: string[];
     };
     /** Deep Linking configuration */
-    deepLinking?: {
-      /** URL to return deep linking response */
-      returnUrl: string;
-      /** Accepted content types */
-      acceptTypes: string[];
-      /** Accepted presentation targets */
-      acceptPresentationDocumentTargets: string[];
-      /** Accepted media types */
-      acceptMediaTypes?: string;
-      /** Whether multiple items can be selected */
-      acceptMultiple: boolean;
-      /** Whether items should be auto-created */
-      autoCreate: boolean;
-      /** Platform-specific data to return */
-      data?: string;
-    };
+    deepLinking?: LtiDeepLinkingSettings;
   };
 
   /** Custom parameters passed from platform */

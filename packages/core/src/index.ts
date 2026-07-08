@@ -6,7 +6,6 @@ export { createNoopLogger } from './utils/noopLogger.js';
 export {
   isLtiDeepLinkingContentTypeAccepted,
   parseLtiDeepLinkingSettings,
-  type LtiDeepLinkingSettings,
 } from './utils/deepLinkingSettings.js';
 export {
   createLtiResourceLinkContentItem,
