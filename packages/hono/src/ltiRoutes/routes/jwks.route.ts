@@ -1,5 +1,4 @@
-import { type Handler } from 'hono';
-
+import type { LtiHonoHandler } from '../../honoTypes.js';
 import { type LtiJwksRouteDeps } from '../../ltiRouteDeps.js';
 
 /**
@@ -7,7 +6,7 @@ import { type LtiJwksRouteDeps } from '../../ltiRouteDeps.js';
  * @param deps - Protocol dependencies for the JWKS route
  * @returns Route handler for JWKS endpoint
  */
-export function jwksRouteHandler(deps: LtiJwksRouteDeps): Handler {
+export function jwksRouteHandler(deps: LtiJwksRouteDeps): LtiHonoHandler {
   return async (c) => {
     try {
       return c.json(await deps.getJWKS());

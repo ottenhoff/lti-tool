@@ -1,6 +1,6 @@
-import { type Handler } from 'hono';
 import { ZodError } from 'zod';
 
+import type { LtiHonoHandler } from '../../honoTypes.js';
 import { type LtiLaunchRouteDeps } from '../../ltiRouteDeps.js';
 import { verifyLaunchSession } from '../launchFlow.js';
 
@@ -9,7 +9,7 @@ import { verifyLaunchSession } from '../launchFlow.js';
  * @param deps - Protocol dependencies for the launch route
  * @returns Route handler for LTI launch
  */
-export function launchRouteHandler(deps: LtiLaunchRouteDeps): Handler {
+export function launchRouteHandler(deps: LtiLaunchRouteDeps): LtiHonoHandler {
   return async (c) => {
     try {
       const result = await verifyLaunchSession(c, deps);

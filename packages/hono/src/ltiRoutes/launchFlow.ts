@@ -9,7 +9,8 @@ import {
   type LtiVerifiedLaunch,
   type LTISession,
 } from '@longsightgroup/lti-tool';
-import type { Context } from 'hono';
+
+import type { LtiHonoContext } from '../honoTypes.js';
 
 export type VerifyLaunchEventOptions = Pick<
   LtiVerifyLaunchOptions,
@@ -36,7 +37,7 @@ export type LtiLaunchVerificationFlowResult<TLaunch extends LtiVerifiedLaunch> =
     };
 
 export type LtiLaunchVerificationFailureContext = {
-  readonly hono: Context;
+  readonly hono: LtiHonoContext;
   readonly error: LtiLaunchVerificationError;
 };
 
@@ -45,7 +46,7 @@ export type LtiLaunchVerificationFailureResponse = (
 ) => Response | Promise<Response>;
 
 export type HonoLtiLaunchVerificationEventContext = {
-  readonly hono: Context;
+  readonly hono: LtiHonoContext;
   readonly event: LtiLaunchVerificationEvent;
 };
 
@@ -65,7 +66,7 @@ export type LtiLaunchFlowResult<TLaunch extends LtiVerifiedLaunch> =
     };
 
 export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
-  c: Context,
+  c: LtiHonoContext,
   deps: Pick<LtiLaunchFlowDeps<TLaunch>, 'verifyLaunch'> & {
     readonly onVerificationFailure?: LtiLaunchVerificationFailureResponse;
     readonly onVerificationEvent?: HonoLtiLaunchVerificationEventObserver;
@@ -96,7 +97,7 @@ export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
 
     return {
       success: false,
-      response: renderDefaultLaunchVerificationFailureResponse({
+      response: await renderDefaultLaunchVerificationFailureResponse({
         hono: c,
         error: verification.error,
       }),
@@ -110,7 +111,7 @@ export async function verifyLaunchRequest<TLaunch extends LtiVerifiedLaunch>(
 }
 
 export async function verifyLaunchSession<TLaunch extends LtiVerifiedLaunch>(
-  c: Context,
+  c: LtiHonoContext,
   deps: LtiLaunchFlowDeps<TLaunch>,
 ): Promise<LtiLaunchFlowResult<TLaunch>> {
   const verification = await verifyLaunchRequest(c, deps);
@@ -158,14 +159,14 @@ function launchVerificationErrorMessage(status: 401 | 500): string {
 
 export function renderDefaultLaunchVerificationFailureResponse(
   context: LtiLaunchVerificationFailureContext,
-): Response {
+): Response | Promise<Response> {
   const status = launchVerificationErrorStatus(context.error.code);
   return context.hono.json({ error: launchVerificationErrorMessage(status) }, status);
 }
 
 function notifyHonoLaunchVerificationEvent(
   observer: HonoLtiLaunchVerificationEventObserver | undefined,
-  hono: Context,
+  hono: LtiHonoContext,
   event: LtiLaunchVerificationEvent,
 ): void {
   notifyLaunchVerificationEvent(

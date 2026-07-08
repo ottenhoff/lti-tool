@@ -5,9 +5,9 @@ import {
   renderLtiPostMessageStorageRedirectPage,
   type LTI13LoginInitiation,
 } from '@longsightgroup/lti-tool';
-import { type Context, type Handler } from 'hono';
 import { ZodError } from 'zod';
 
+import type { LtiHonoContext, LtiHonoHandler } from '../../honoTypes.js';
 import { type LtiLoginRouteDeps } from '../../ltiRouteDeps.js';
 
 /**
@@ -15,7 +15,7 @@ import { type LtiLoginRouteDeps } from '../../ltiRouteDeps.js';
  * @param deps - Protocol dependencies for the login route
  * @returns Route handler for LTI login
  */
-export function loginRouteHandler(deps: LtiLoginRouteDeps): Handler {
+export function loginRouteHandler(deps: LtiLoginRouteDeps): LtiHonoHandler {
   return async (c) => {
     try {
       const params = await getLoginInitiationParams(c);
@@ -46,7 +46,9 @@ export function loginRouteHandler(deps: LtiLoginRouteDeps): Handler {
   };
 }
 
-async function getLoginInitiationParams(c: Context): Promise<LTI13LoginInitiation> {
+async function getLoginInitiationParams(
+  c: LtiHonoContext,
+): Promise<LTI13LoginInitiation> {
   if (c.req.method === 'GET') {
     return parseLtiLoginInitiation({
       iss: c.req.query('iss'),
@@ -72,9 +74,9 @@ async function getLoginInitiationParams(c: Context): Promise<LTI13LoginInitiatio
 }
 
 function renderPostMessageStorageResponse(
-  c: Context,
+  c: LtiHonoContext,
   input: { authorizationRedirectUrl: string; storageTarget?: string },
-): Response | null {
+): Response | Promise<Response> | null {
   const postMessageStorageRedirect = createLtiPostMessageStorageRedirect(input);
   if (!postMessageStorageRedirect) return null;
 

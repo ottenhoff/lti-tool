@@ -3,9 +3,9 @@ import {
   type LtiServiceError,
   RegistrationRequestSchema,
 } from '@longsightgroup/lti-tool';
-import { type Handler } from 'hono';
 import { ZodError } from 'zod';
 
+import type { LtiHonoHandler } from '../../honoTypes.js';
 import {
   type LtiCompleteDynamicRegistrationRouteDeps,
   type LtiInitiateDynamicRegistrationRouteDeps,
@@ -19,7 +19,7 @@ import {
  */
 export function initiateDynamicRegistrationRouteHandler(
   deps: LtiInitiateDynamicRegistrationRouteDeps,
-): Handler {
+): LtiHonoHandler {
   return async (c) => {
     try {
       const queryData = c.req.query();
@@ -67,7 +67,7 @@ export function initiateDynamicRegistrationRouteHandler(
  */
 export function completeDynamicRegistrationRouteHandler(
   deps: LtiCompleteDynamicRegistrationRouteDeps,
-): Handler {
+): LtiHonoHandler {
   return async (c) => {
     try {
       const formData = await c.req.parseBody({ all: true });

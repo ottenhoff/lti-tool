@@ -1,5 +1,4 @@
-import { type Handler } from 'hono';
-
+import type { LtiHonoHandler } from '../../honoTypes.js';
 import { type LtiDeepLinkRouteDeps } from '../../ltiRouteDeps.js';
 
 /**
@@ -7,7 +6,7 @@ import { type LtiDeepLinkRouteDeps } from '../../ltiRouteDeps.js';
  * @param deps - Protocol dependencies for the deep linking route
  * @returns Route handler for deep linking
  */
-export function deepLinkRouteHandler(deps: LtiDeepLinkRouteDeps): Handler {
+export function deepLinkRouteHandler(deps: LtiDeepLinkRouteDeps): LtiHonoHandler {
   return async (c) => {
     try {
       const { ltiSessionId } = c.req.query();

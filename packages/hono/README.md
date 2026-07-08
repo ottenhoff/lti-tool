@@ -135,6 +135,11 @@ with `renderDefaultLaunchVerificationFailureResponse` to override only selected 
 codes. `launchRouteHandler` keeps the built-in default mapping and does not accept this
 hook.
 
+Individual route handlers, including `customLaunchRouteHandler`, return the structural
+`LtiHonoHandler` type exported by this package. It describes only the Hono context
+methods these handlers use, so apps importing Hono from another source such as
+`@hono/hono` can call or mount the handlers without a dependency-source cast.
+
 ### createLtiOptionalRouteDeps(options)
 
 Binds dependency objects for optional routes from `LTITool` and `LtiDynamicRegistration` instances. Pass the same optional `logger` you use with `createLtiRoutes` when you want route-level error logging.

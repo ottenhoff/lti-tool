@@ -12,9 +12,9 @@ import {
   type ResolvedLtiResourceLinkLaunchMessage,
   type LTISession,
 } from '@longsightgroup/lti-tool';
-import { type Context, type Handler } from 'hono';
 import { ZodError } from 'zod';
 
+import type { LtiHonoContext, LtiHonoHandler } from '../../honoTypes.js';
 import {
   verifyLaunchRequest,
   type HonoLtiLaunchVerificationEventObserver,
@@ -23,7 +23,7 @@ import {
 } from '../launchFlow.js';
 
 type CustomLaunchContext<TLaunch extends LtiVerifiedLaunch> = {
-  readonly hono: Context;
+  readonly hono: LtiHonoContext;
   readonly launch: TLaunch;
   readonly session: LTISession;
   readonly advantage: LtiAdvantagePort;
@@ -56,7 +56,7 @@ export type CustomVerifiedLaunchContext<TLaunch extends LtiVerifiedLaunch> =
   };
 
 export type CustomLaunchErrorContext = {
-  readonly hono: Context;
+  readonly hono: LtiHonoContext;
   readonly error: unknown;
 };
 
@@ -96,15 +96,17 @@ export type AuthorizedCustomLaunchRouteOptions<TAuthorization> =
  * Creates a custom LTI launch handler that owns protocol verification and lets
  * applications render Resource Link and Deep Linking launches.
  */
-export function customLaunchRouteHandler(options: CustomLaunchRouteOptions): Handler;
+export function customLaunchRouteHandler(
+  options: CustomLaunchRouteOptions,
+): LtiHonoHandler;
 
 export function customLaunchRouteHandler<TAuthorization>(
   options: AuthorizedCustomLaunchRouteOptions<TAuthorization>,
-): Handler;
+): LtiHonoHandler;
 
 export function customLaunchRouteHandler<TAuthorization>(
   options: CustomLaunchRouteOptions | AuthorizedCustomLaunchRouteOptions<TAuthorization>,
-): Handler {
+): LtiHonoHandler {
   if (options.authorizeLaunch) {
     return createAuthorizedCustomLaunchRouteHandler(options);
   }
@@ -116,7 +118,7 @@ export function customLaunchRouteHandler<TAuthorization>(
 
 function createAuthorizedCustomLaunchRouteHandler<TAuthorization>(
   options: AuthorizedCustomLaunchRouteOptions<TAuthorization>,
-): Handler {
+): LtiHonoHandler {
   return createCustomLaunchRouteHandler(options, (idToken, state, verifyOptions) =>
     options.ltiTool.verifyLaunch(idToken, state, {
       authorizeVerifiedLaunch: options.authorizeLaunch,
@@ -132,7 +134,7 @@ function createCustomLaunchRouteHandler<TLaunch extends LtiVerifiedLaunch>(
     state: string,
     options?: VerifyLaunchEventOptions,
   ) => Promise<LtiLaunchVerificationResult<TLaunch>>,
-): Handler {
+): LtiHonoHandler {
   return async (c) => {
     try {
       const verification = await verifyLaunchRequest(c, {
@@ -177,7 +179,7 @@ function createCustomLaunchRouteHandler<TLaunch extends LtiVerifiedLaunch>(
 }
 
 async function renderCustomLaunchError<TLaunch extends LtiVerifiedLaunch>(
-  c: Context,
+  c: LtiHonoContext,
   options: Pick<CustomLaunchRendererOptions<TLaunch>, 'logger' | 'onError'>,
   error: unknown,
 ): Promise<Response> {

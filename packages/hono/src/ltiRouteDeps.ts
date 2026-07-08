@@ -13,8 +13,8 @@ import type {
   LTISession,
   RegistrationRequest,
 } from '@longsightgroup/lti-tool';
-import type { Context } from 'hono';
 
+import type { LtiHonoContext } from './honoTypes.js';
 import type { HonoLtiLaunchVerificationEventObserver } from './ltiRoutes/launchFlow.js';
 
 export type LtiJwksRouteDeps = {
@@ -50,7 +50,7 @@ export type LtiInitiateDynamicRegistrationRouteDeps = {
     options?: LtiDynamicRegistrationInitiationOptions,
   ) => ReturnType<LtiDynamicRegistration['initiateDynamicRegistration']>;
   getDynamicRegistrationAppState?: (context: {
-    hono: Context;
+    hono: LtiHonoContext;
     registrationRequest: RegistrationRequest;
   }) =>
     | DynamicRegistrationAppState
