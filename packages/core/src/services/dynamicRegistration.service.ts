@@ -41,6 +41,11 @@ export interface LtiDynamicRegistrationCompletionResult {
   appState?: DynamicRegistrationAppState;
 }
 
+export interface LtiDynamicRegistrationInitiationResult {
+  readonly html: string;
+  readonly sessionToken: string;
+}
+
 export interface LtiDynamicRegistrationInitiationOptions {
   /** JSON-serializable app-owned state returned with the completion result */
   appState?: DynamicRegistrationAppState;
@@ -95,7 +100,9 @@ const storeDynamicRegistrationResult = (input: {
  * );
  *
  * // Initiate registration
- * const formHtml = await service.initiateDynamicRegistration(request, '/lti/register');
+ * const initiation = await service.initiateDynamicRegistration(request, '/lti/register');
+ * const formHtml = initiation.html;
+ * const sessionToken = initiation.sessionToken;
  *
  * // Complete registration
  * const result = await service.completeDynamicRegistration(formData);
@@ -164,18 +171,18 @@ export class DynamicRegistrationService {
 
   /**
    * Initiates LTI 1.3 dynamic registration by fetching platform configuration and generating a registration form.
-   * Creates a temporary session and returns HTML form for service selection.
+   * Creates a temporary session and returns the rendered service-selection form plus its session token.
    *
    * @param registrationRequest - Registration request containing openid_configuration URL and optional registration_token
    * @param requestPath - Current request path used to build form action URLs
-   * @returns HTML form for service selection and registration completion
+   * @returns Initiation result with HTML form and registration session token
    * @throws {Error} When platform configuration fetch fails or session creation fails
    */
   async initiateDynamicRegistration(
     registrationRequest: RegistrationRequest,
     requestPath: string,
     options: LtiDynamicRegistrationInitiationOptions = {},
-  ): Promise<string> {
+  ): Promise<LtiDynamicRegistrationInitiationResult> {
     // 1. Validate request
     const openIdConfiguration =
       await this.fetchPlatformConfiguration(registrationRequest);
@@ -195,7 +202,10 @@ export class DynamicRegistrationService {
     await this.storage.setRegistrationSession(sessionToken, session);
 
     // 3. build registration form
-    return renderDynamicRegistrationForm(openIdConfiguration, requestPath, sessionToken);
+    return {
+      html: renderDynamicRegistrationForm(openIdConfiguration, requestPath, sessionToken),
+      sessionToken,
+    };
   }
 
   /**

@@ -127,7 +127,10 @@ describe('initiateDynamicRegistrationRouteHandler', () => {
   it('passes app state from the route callback to registration initiation', async () => {
     initiateDynamicRegistrationMock.mockResolvedValueOnce({
       success: true,
-      data: '<html><body>Configure registration</body></html>',
+      data: {
+        html: '<html><body>Configure registration</body></html>',
+        sessionToken: 'session-token-1',
+      },
     });
     const getDynamicRegistrationAppState = vi.fn(() => ({
       tenantId: 'tenant-1',

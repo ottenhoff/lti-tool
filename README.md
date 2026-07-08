@@ -338,6 +338,9 @@ const ltiConfig = {
 `getDynamicRegistrationAppState` are stored with the temporary registration session
 and returned in `LtiDynamicRegistrationCompletionResult`. They must be JSON values.
 Define your own Zod schema in application code when you need typed customization hooks.
+`initiateDynamicRegistration` returns `{ html, sessionToken }`, so non-Hono callers
+can render the generated form or complete a programmatic registration without scraping
+the hidden session token out of the HTML.
 
 `platforms` is keyed by built-in profile key (`canvas`, `brightspace`, `moodle`,
 or `sakai`). Add the key to the public config type and built-in profile table when

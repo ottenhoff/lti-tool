@@ -115,6 +115,7 @@ export {
 } from './utils/ltiSessionCodecs.js';
 export type {
   LtiDynamicRegistrationCompletionResult,
+  LtiDynamicRegistrationInitiationResult,
   LtiDynamicRegistrationInitiationOptions,
 } from './services/dynamicRegistration.service.js';
 export { LTITool } from './ltiTool.js';

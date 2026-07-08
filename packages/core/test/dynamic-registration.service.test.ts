@@ -261,7 +261,7 @@ describe('DynamicRegistrationService', () => {
       }),
     );
 
-    const html = await service.initiateDynamicRegistration(
+    const initiation = await service.initiateDynamicRegistration(
       {
         openid_configuration:
           'https://sakai.example/imsblis/lti13/well_known?key=1&clientId=abc',
@@ -270,8 +270,9 @@ describe('DynamicRegistrationService', () => {
       '/lti/register',
     );
 
-    expect(html).toContain('Configure LTI Advantage Settings');
-    expect(html).not.toContain('for Sakai');
+    expect(initiation.sessionToken).toBe(SESSION_TOKEN);
+    expect(initiation.html).toContain('Configure LTI Advantage Settings');
+    expect(initiation.html).not.toContain('for Sakai');
     expect(storage.setRegistrationSession).toHaveBeenCalledWith(
       SESSION_TOKEN,
       expect.objectContaining({

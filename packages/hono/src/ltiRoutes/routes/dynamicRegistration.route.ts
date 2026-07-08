@@ -45,7 +45,7 @@ export function initiateDynamicRegistrationRouteHandler(
         );
       }
 
-      return c.html(result.data);
+      return c.html(result.data.html);
     } catch (error) {
       deps.logger.error(
         { error, path: c.req.path },
