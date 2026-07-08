@@ -2,6 +2,7 @@ import type { LTISession } from '../interfaces/ltiSession.js';
 import type { LtiDeepLinkingSettings } from '../schemas/ltiDeepLinkingSettings.schema.js';
 
 import { getLtiAgsService } from './ags.js';
+import { pickDefined } from './definedProperties.js';
 import { getLtiNrpsService } from './nrps.js';
 
 /** Resolved Assignment and Grade Services capability metadata for an LTI session. */
@@ -76,15 +77,15 @@ export function resolveLtiServiceCapabilities(
   return {
     ags: {
       available: agsService !== undefined,
-      ...(agsService?.lineitem === undefined ? {} : { lineitem: agsService.lineitem }),
-      ...(agsService?.lineitems === undefined ? {} : { lineitems: agsService.lineitems }),
+      ...pickDefined({
+        lineitem: agsService?.lineitem,
+        lineitems: agsService?.lineitems,
+      }),
       scopes: [...(agsService?.scopes ?? [])],
     },
     nrps: {
       available: nrpsService !== undefined,
-      ...(nrpsService?.membershipUrl === undefined
-        ? {}
-        : { membershipUrl: nrpsService.membershipUrl }),
+      ...pickDefined({ membershipUrl: nrpsService?.membershipUrl }),
       versions: [...(nrpsService?.versions ?? [])],
     },
     deepLinking: {

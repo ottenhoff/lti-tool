@@ -11,6 +11,7 @@
 - Preserve Deep Linking `window` and `iframe` presentation options for `link` and `ltiResourceLink` content items.
 - Preserve JSON extension properties on built-in Deep Linking content items and allow custom extension content item types.
 - Derive the `createLtiResourceLinkContentItem` input from the LTI Resource Link schema and preserve extension properties through the builder.
+- Centralize optional-property projection in Deep Linking/session capability helpers.
 
 ## 0.1.3
 

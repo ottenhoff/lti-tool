@@ -4,6 +4,8 @@ import {
   type LtiDeepLinkingSettings,
 } from '../schemas/ltiDeepLinkingSettings.schema.js';
 
+import { pickDefined } from './definedProperties.js';
+
 export function parseLtiDeepLinkingSettings(
   input: unknown,
 ): LtiDeepLinkingSettings | undefined {
@@ -14,17 +16,15 @@ export function parseLtiDeepLinkingSettings(
     returnUrl: settings.deep_link_return_url,
     acceptTypes: settings.accept_types,
     acceptPresentationDocumentTargets: settings.accept_presentation_document_targets,
-    ...(settings.accept_media_types === undefined
-      ? {}
-      : { acceptMediaTypes: settings.accept_media_types }),
+    ...pickDefined({
+      acceptMediaTypes: settings.accept_media_types,
+      acceptLineItem: settings.accept_lineitem,
+      title: settings.title,
+      text: settings.text,
+      data: settings.data,
+    }),
     acceptMultiple: settings.accept_multiple ?? false,
-    ...(settings.accept_lineitem === undefined
-      ? {}
-      : { acceptLineItem: settings.accept_lineitem }),
     autoCreate: settings.auto_create ?? false,
-    ...(settings.title === undefined ? {} : { title: settings.title }),
-    ...(settings.text === undefined ? {} : { text: settings.text }),
-    ...(settings.data === undefined ? {} : { data: settings.data }),
   });
 }
 

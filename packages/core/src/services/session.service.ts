@@ -13,6 +13,7 @@ import {
 import type { LTISession } from '../interfaces/ltiSession.js';
 import type { LTI13JwtPayload } from '../schemas/index.js';
 import { parseLtiDeepLinkingSettings } from '../utils/deepLinkingSettings.js';
+import { pickDefined } from '../utils/definedProperties.js';
 import {
   hasLtiAdministratorRole,
   hasLtiInstructorRole,
@@ -76,7 +77,7 @@ export function createSession(
     jwtPayload: lti13JwtPayload,
     id: crypto.randomUUID(),
     user: {
-      ...(lti13JwtPayload.sub === undefined ? {} : { id: lti13JwtPayload.sub }),
+      ...pickDefined({ id: lti13JwtPayload.sub }),
       name: lti13JwtPayload.name,
       email: lti13JwtPayload.email,
       familyName: lti13JwtPayload.family_name,

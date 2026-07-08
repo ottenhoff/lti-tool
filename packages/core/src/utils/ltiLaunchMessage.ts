@@ -19,6 +19,7 @@ import {
 import type { LtiDeepLinkingSettings } from '../schemas/ltiDeepLinkingSettings.schema.js';
 
 import { parseLtiDeepLinkingSettings } from './deepLinkingSettings.js';
+import { pickDefined } from './definedProperties.js';
 import { classifyLtiRoles, simplifyLtiRoles, type LtiRoleKind } from './ltiRoles.js';
 
 export type LtiLaunchMessageResolutionErrorCode =
@@ -98,7 +99,7 @@ export function resolveLtiLaunchMessage(
       subject: payload.sub,
       resourceLink: {
         id: resourceLink.id,
-        ...(resourceLink.title === undefined ? {} : { title: resourceLink.title }),
+        ...pickDefined({ title: resourceLink.title }),
       },
     };
   }
@@ -118,7 +119,7 @@ export function resolveLtiLaunchMessage(
       ...base,
       kind: 'deep-linking',
       messageType,
-      ...(payload.sub === undefined ? {} : { subject: payload.sub }),
+      ...pickDefined({ subject: payload.sub }),
       deepLinkingSettings,
     };
   }
@@ -158,8 +159,7 @@ function resolveBaseLaunchMessage(
       : {
           context: {
             id: context.id,
-            ...(context.label === undefined ? {} : { label: context.label }),
-            ...(context.title === undefined ? {} : { title: context.title }),
+            ...pickDefined({ label: context.label, title: context.title }),
           },
         }),
     customParameters: payload[LTI_CLAIM_CUSTOM] ?? {},
