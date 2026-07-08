@@ -1,12 +1,5 @@
 import * as z from 'zod';
 
-const knownContentItemTypes = new Set([
-  'ltiResourceLink',
-  'link',
-  'html',
-  'file',
-  'image',
-]);
 const ContentItemExtensionValueSchema = z.json();
 
 /**
@@ -175,6 +168,17 @@ export const ImageSchema = BaseContentItemSchema.extend({
   height: z.number().optional(),
 });
 
+const KnownContentItemSchemas = [
+  LtiResourceLinkSchema,
+  LinkSchema,
+  HtmlSchema,
+  FileSchema,
+  ImageSchema,
+] as const;
+const knownContentItemTypes: ReadonlySet<string> = new Set(
+  KnownContentItemSchemas.map((schema) => schema.shape.type.value),
+);
+
 /**
  * Zod schema for validating built-in Deep Linking content item types.
  * Uses discriminated union on the 'type' field to determine the specific content item schema.
@@ -182,13 +186,7 @@ export const ImageSchema = BaseContentItemSchema.extend({
  *
  * @see https://www.imsglobal.org/spec/lti-dl/v2p0#content-item-types
  */
-const KnownContentItemSchema = z.discriminatedUnion('type', [
-  LtiResourceLinkSchema,
-  LinkSchema,
-  HtmlSchema,
-  FileSchema,
-  ImageSchema,
-]);
+const KnownContentItemSchema = z.discriminatedUnion('type', KnownContentItemSchemas);
 
 /**
  * Zod schema for validating custom Deep Linking extension content item types.
