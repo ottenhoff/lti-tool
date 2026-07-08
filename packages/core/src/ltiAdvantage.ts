@@ -137,11 +137,15 @@ export class LtiAdvantage {
   /**
    * Submits a grade score to the platform using Assignment and Grade Services.
    */
-  async submitScore(score: ScoreSubmission): Promise<LtiServiceResult<void>> {
+  async submitScore(
+    score: ScoreSubmission,
+    options: AGSLineItemTargetOptions = {},
+  ): Promise<LtiServiceResult<void>> {
     return await runAgsEmptyOperation(this.session, {
       operation: 'submitScore',
       scope: AGS_SCORE_SCOPE,
-      resolveUrl: () => requireAgsLineItem<void>(this.session, 'submitScore'),
+      resolveUrl: () =>
+        requireAgsLineItem<void>(this.session, 'submitScore', options.lineItemUrl),
       request: (url) => this.services.agsService.submitScore(this.session, url, score),
     });
   }

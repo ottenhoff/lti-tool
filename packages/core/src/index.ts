@@ -132,6 +132,11 @@ export {
   type NrpsMembersPagination,
   type NrpsMembersResult,
 } from './ltiAdvantage.js';
+export type {
+  AGSGetScoresOptions,
+  AGSLineItemTargetOptions,
+  AGSListLineItemsOptions,
+} from './services/ags.service.js';
 export { LtiDynamicRegistration } from './ltiDynamicRegistration.js';
 export {
   projectDynamicRegistrationLaunchRegistration,

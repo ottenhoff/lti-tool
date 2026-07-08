@@ -169,6 +169,21 @@ describe('LTI service results', () => {
     expect(requests[1]?.url).toBe('https://platform.example.com/ags/lineitems/1/scores');
   });
 
+  it('submits AGS scores to a selected line item target', async () => {
+    const response = new Response(null, { status: 204 });
+    const requests = recordFetch([tokenResponse(), response]);
+    const advantage = ltiTool.createAdvantage(session);
+
+    const result = await advantage.submitScore(score, {
+      lineItemUrl: 'https://platform.example.com/ags/lineitems/selected',
+    });
+
+    expect(result).toMatchObject({ success: true });
+    expect(requests[1]?.url).toBe(
+      'https://platform.example.com/ags/lineitems/selected/scores',
+    );
+  });
+
   it('returns a missing scope error before AGS score submission', async () => {
     const advantage = ltiTool.createAdvantage({
       ...session,

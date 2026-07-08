@@ -265,6 +265,9 @@ Once you have a session, create a session-bound Advantage facade:
 ```typescript
 const advantage = ltiTool.createAdvantage(session);
 await advantage.submitScore(score);
+await advantage.submitScore(score, {
+  lineItemUrl: 'https://platform.example.com/ags/lineitems/selected',
+});
 const roster = await advantage.getMembers();
 const fullRoster = await advantage.getMembers({ followPagination: true });
 const deepLink = await advantage.createDeepLinkingResponse(contentItems);
