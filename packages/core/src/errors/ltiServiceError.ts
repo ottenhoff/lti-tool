@@ -16,19 +16,29 @@ export type LtiDynamicRegistrationServiceErrorCode =
   | 'registration_session_expired'
   | 'platform_registration_rejected';
 
-export type LtiServiceErrorCode = LtiDynamicRegistrationServiceErrorCode;
+export type LtiSessionServiceErrorCode =
+  | 'invalid_session_id'
+  | 'session_not_found'
+  | 'session_storage_failed';
+
+export type LtiServiceErrorCode =
+  | LtiDynamicRegistrationServiceErrorCode
+  | LtiSessionServiceErrorCode;
 
 export type LtiServiceKind =
   | 'ags'
   | 'nrps'
   | 'token'
   | 'dynamic_registration'
-  | 'deep_linking';
+  | 'deep_linking'
+  | 'session';
 
 export type LtiServiceErrorCodeForKind<TKind extends LtiServiceKind> =
   TKind extends 'dynamic_registration'
     ? LtiDynamicRegistrationServiceErrorCode
-    : LtiPlatformServiceErrorCode;
+    : TKind extends 'session'
+      ? LtiSessionServiceErrorCode
+      : LtiPlatformServiceErrorCode;
 
 export type LtiServiceErrorInput<TKind extends LtiServiceKind = LtiServiceKind> =
   TKind extends LtiServiceKind
@@ -77,7 +87,7 @@ export type LtiServiceResult<T, TError extends LtiServiceError = LtiServiceError
   | { success: false; error: TError };
 
 type LtiServiceFailureResult = { success: false; error: LtiServiceError };
-type LtiPlatformServiceKind = Exclude<LtiServiceKind, 'token'>;
+type LtiPlatformServiceKind = Exclude<LtiServiceKind, 'token' | 'session'>;
 
 type RunLtiServiceCallBaseInput = {
   serviceKind: LtiPlatformServiceKind;
@@ -108,7 +118,7 @@ export function ltiServicePreconditionFailure<T>(input: {
     LtiPlatformServiceErrorCode,
     'service_not_available' | 'missing_required_scope' | 'invalid_request'
   >;
-  serviceKind: LtiServiceKind;
+  serviceKind: Exclude<LtiServiceKind, 'session'>;
   operation: string;
   message: string;
 }): LtiServiceResult<T> {
@@ -262,7 +272,9 @@ const rewrapDynamicRegistrationServiceError = (
 ): LtiServiceFailureResult => ({
   success: false,
   error: new LtiServiceError({
-    code: error.code,
+    code: isLtiSessionServiceErrorCode(error.code)
+      ? 'platform_request_failed'
+      : error.code,
     serviceKind: 'dynamic_registration',
     operation,
     message: error.message,
@@ -323,6 +335,30 @@ export function isLtiPlatformServiceErrorCode(
     case 'platform_request_failed':
     case 'platform_response_invalid':
       return true;
+    case 'storage_conflict':
+    case 'registration_session_expired':
+    case 'platform_registration_rejected':
+    case 'invalid_session_id':
+    case 'session_not_found':
+    case 'session_storage_failed':
+      return false;
+  }
+}
+
+export function isLtiSessionServiceErrorCode(
+  code: LtiServiceErrorCode,
+): code is LtiSessionServiceErrorCode {
+  switch (code) {
+    case 'invalid_session_id':
+    case 'session_not_found':
+    case 'session_storage_failed':
+      return true;
+    case 'service_not_available':
+    case 'missing_required_scope':
+    case 'invalid_request':
+    case 'token_request_failed':
+    case 'platform_request_failed':
+    case 'platform_response_invalid':
     case 'storage_conflict':
     case 'registration_session_expired':
     case 'platform_registration_rejected':

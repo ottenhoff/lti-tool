@@ -256,6 +256,9 @@ app.post(
 ```
 
 `secureLTISession` middleware validates `ltiSessionId` on incoming requests and sets `ltiSession` on the Hono context. Mount it on your application paths, not on the LTI protocol routes.
+Non-Hono apps can use `requireLtiSession({ storage, sessionId })` to load a
+session with typed `invalid_session_id`, `session_not_found`, and
+`session_storage_failed` results instead of translating `undefined` themselves.
 
 ### Individual route handlers (advanced)
 

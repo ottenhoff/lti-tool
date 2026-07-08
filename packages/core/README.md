@@ -117,6 +117,10 @@ Canvas static JSON requires `description` and `platforms.canvas.privacyLevel`.
 `LTIStorage.validateNonce` atomically claims nonces during launch verification. Configure
 nonce TTL on the storage adapter; core does not pre-store login nonces.
 
+When you are not using the Hono session middleware, call
+`requireLtiSession({ storage, sessionId })` to load a session through a typed
+result channel instead of checking `undefined` in each route.
+
 For tests, import builders and fakes from `@longsightgroup/lti-tool/testing`:
 
 ```typescript

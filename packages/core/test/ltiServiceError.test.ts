@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatLtiServiceError, LtiServiceError } from '../src/index.js';
+import {
+  formatLtiServiceError,
+  isLtiPlatformServiceErrorCode,
+  isLtiSessionServiceErrorCode,
+  LtiServiceError,
+} from '../src/index.js';
 
 describe('LTI service errors', () => {
   it('formats errors with only a safe message', () => {
@@ -31,5 +36,12 @@ describe('LTI service errors', () => {
     expect(formatLtiServiceError(error)).toBe(
       'NRPS get members failed status 503 Service Unavailable: {"error":"membership unavailable"}',
     );
+  });
+
+  it('does not classify session loader errors as platform service errors', () => {
+    expect(isLtiPlatformServiceErrorCode('session_not_found')).toBe(false);
+    expect(isLtiPlatformServiceErrorCode('session_storage_failed')).toBe(false);
+    expect(isLtiSessionServiceErrorCode('session_not_found')).toBe(true);
+    expect(isLtiSessionServiceErrorCode('platform_request_failed')).toBe(false);
   });
 });

@@ -107,6 +107,11 @@ export {
   type LtiToolPublicJwk,
 } from './utils/ltiToolKeyPair.js';
 export {
+  requireLtiSession,
+  type LtiSessionStorageReader,
+  type RequireLtiSessionInput,
+} from './utils/ltiSessionLookup.js';
+export {
   parsePersistedLtiDynamicRegistrationSession,
   parsePersistedLtiDynamicRegistrationSessionValue,
   parsePersistedLtiSession,
@@ -155,9 +160,11 @@ export {
 export {
   formatLtiServiceError,
   isLtiPlatformServiceErrorCode,
+  isLtiSessionServiceErrorCode,
   LtiServiceError,
   type LtiDynamicRegistrationServiceErrorCode,
   type LtiPlatformServiceErrorCode,
+  type LtiSessionServiceErrorCode,
   type LtiServiceErrorCode,
   type LtiServiceErrorInput,
   type LtiServiceKind,

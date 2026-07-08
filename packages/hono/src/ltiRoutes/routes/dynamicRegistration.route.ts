@@ -122,6 +122,9 @@ function dynamicRegistrationErrorStatus(error: LtiServiceError): 400 | 500 {
     case 'token_request_failed':
     case 'platform_request_failed':
     case 'platform_response_invalid':
+    case 'invalid_session_id':
+    case 'session_not_found':
+    case 'session_storage_failed':
       return 500;
   }
 }
@@ -143,6 +146,9 @@ function dynamicRegistrationErrorMessage(error: LtiServiceError): string {
     case 'token_request_failed':
     case 'platform_request_failed':
     case 'platform_response_invalid':
+    case 'invalid_session_id':
+    case 'session_not_found':
+    case 'session_storage_failed':
       return 'Internal server error';
   }
 }

@@ -1,5 +1,6 @@
 import {
   isLtiPlatformServiceErrorCode,
+  isLtiSessionServiceErrorCode,
   LTI_CLAIM_DEPLOYMENT_ID,
   LTI_CLAIM_TARGET_LINK_URI,
   LTI13JwtPayloadSchema,
@@ -10,6 +11,7 @@ import {
   type LtiServiceErrorCode,
   type LtiServiceKind,
   type LtiServiceResult,
+  type LtiSessionServiceErrorCode,
   type LtiVerifiedLaunch,
   type Member,
   type NrpsGetMembersOptions,
@@ -19,6 +21,8 @@ import {
 } from '@longsightgroup/lti-tool';
 
 import { createMockLTIPayload, testLaunchConfig } from './fixtures.js';
+
+type FakeAdvantageServiceKind = 'ags' | 'nrps' | 'deep_linking';
 
 /**
  * Builds a verified launch fixture with coherent launch config defaults.
@@ -59,10 +63,25 @@ export function createTestServiceError(
     readonly cause?: unknown;
   } = {},
 ): LtiServiceError {
-  if (input.serviceKind === 'dynamic_registration') {
+  const serviceKind = input.serviceKind ?? 'ags';
+
+  if (serviceKind === 'session') {
     return new LtiServiceError({
-      code: input.code ?? 'service_not_available',
-      serviceKind: 'dynamic_registration',
+      code: readSessionServiceErrorCode(input.code),
+      serviceKind,
+      operation: input.operation ?? 'testOperation',
+      message: input.message ?? 'Test LTI service error',
+      ...(input.cause === undefined ? {} : { cause: input.cause }),
+    });
+  }
+
+  if (serviceKind === 'dynamic_registration') {
+    const requestedCode = input.code ?? 'service_not_available';
+    return new LtiServiceError({
+      code: isLtiSessionServiceErrorCode(requestedCode)
+        ? 'service_not_available'
+        : requestedCode,
+      serviceKind,
       operation: input.operation ?? 'testOperation',
       message: input.message ?? 'Test LTI service error',
       ...(input.cause === undefined ? {} : { cause: input.cause }),
@@ -76,11 +95,21 @@ export function createTestServiceError(
 
   return new LtiServiceError({
     code,
-    serviceKind: input.serviceKind ?? 'ags',
+    serviceKind,
     operation: input.operation ?? 'testOperation',
     message: input.message ?? 'Test LTI service error',
     ...(input.cause === undefined ? {} : { cause: input.cause }),
   });
+}
+
+function readSessionServiceErrorCode(
+  code: LtiServiceErrorCode | undefined,
+): LtiSessionServiceErrorCode {
+  return code === undefined
+    ? 'session_not_found'
+    : isLtiSessionServiceErrorCode(code)
+      ? code
+      : 'session_not_found';
 }
 
 function fakeGetMembers(): Promise<LtiServiceResult<Member[]>>;
@@ -128,7 +157,7 @@ export function createFakeLtiAdvantage(
 }
 
 function unavailable<T>(
-  serviceKind: LtiServiceKind,
+  serviceKind: FakeAdvantageServiceKind,
   operation: string,
 ): LtiServiceResult<T> {
   return {
