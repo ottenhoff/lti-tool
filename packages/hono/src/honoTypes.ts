@@ -1,12 +1,4 @@
-export type LtiHonoStatus =
-  | 200
-  | 400
-  | 401
-  | 403
-  | 404
-  | 409
-  | 500
-  | 501;
+export type LtiHonoStatus = 200 | 400 | 401 | 403 | 404 | 409 | 500 | 501;
 
 export type LtiHonoRedirectStatus = 301 | 302 | 303 | 307 | 308;
 
@@ -19,7 +11,9 @@ export type LtiHonoRequest = {
   query(): Record<string, string>;
   query(key: string): string | undefined;
   formData(): Promise<FormData>;
-  parseBody(options?: { readonly all?: boolean }): Promise<Record<string, LtiHonoBodyValue>>;
+  parseBody(options?: {
+    readonly all?: boolean;
+  }): Promise<Record<string, LtiHonoBodyValue>>;
 };
 
 export type LtiHonoExecutionContext = {
