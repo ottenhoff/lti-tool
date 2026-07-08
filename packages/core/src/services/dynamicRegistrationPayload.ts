@@ -10,6 +10,7 @@ import type {
   DynamicRegistrationCustomizationContext,
 } from '../interfaces/ltiConfig.js';
 import type { DynamicRegistrationAppState } from '../schemas/lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
+import type { DynamicRegistrationSelectedService } from '../schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
 import { LTIMessagesArraySchema } from '../schemas/lti13/dynamicRegistration/ltiMessages.schema.js';
 import type { OpenIDConfiguration } from '../schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
 import {
@@ -69,7 +70,9 @@ function buildBaseRegistrationPayload(input: {
   };
 }
 
-export function buildDynamicRegistrationScopes(selectedServices: string[]): string[] {
+export function buildDynamicRegistrationScopes(
+  selectedServices: readonly DynamicRegistrationSelectedService[],
+): string[] {
   const scopes: string[] = [];
 
   if (selectedServices.includes('ags')) {
@@ -90,7 +93,7 @@ export function buildDynamicRegistrationScopes(selectedServices: string[]): stri
 export function buildToolRegistrationPayload(input: {
   config: DynamicRegistrationConfig;
   openIdConfiguration: OpenIDConfiguration;
-  selectedServices: string[];
+  selectedServices: readonly DynamicRegistrationSelectedService[];
   appState?: DynamicRegistrationAppState;
 }): ToolRegistrationPayload {
   const { config, openIdConfiguration, selectedServices, appState } = input;

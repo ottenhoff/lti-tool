@@ -37,3 +37,6 @@ export const DynamicRegistrationFormSchema = z.object({
 });
 
 export type DynamicRegistrationForm = z.infer<typeof DynamicRegistrationFormSchema>;
+export type DynamicRegistrationSelectedService = NonNullable<
+  DynamicRegistrationForm['services']
+>[number];

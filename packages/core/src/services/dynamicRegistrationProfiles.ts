@@ -13,6 +13,7 @@ import type {
   DynamicRegistrationPlatformsConfig,
   PlatformDynamicRegistrationConfig,
 } from '../interfaces/ltiConfig.js';
+import type { DynamicRegistrationSelectedService } from '../schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
 import type { LTIMessage } from '../schemas/lti13/dynamicRegistration/ltiMessages.schema.js';
 import type { OpenIDConfiguration } from '../schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
 import type { ToolRegistrationPayload } from '../schemas/lti13/dynamicRegistration/toolRegistrationPayload.schema.js';
@@ -77,7 +78,7 @@ function buildPlacementDeepLinkingMessages(
 }
 
 function buildPlacementMessages(input: {
-  selectedServices: string[];
+  selectedServices: readonly DynamicRegistrationSelectedService[];
   deepLinkingUri: string;
   launchUri: string;
   toolName: string;

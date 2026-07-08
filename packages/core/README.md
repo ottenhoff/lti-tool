@@ -93,6 +93,27 @@ schedule asynchronous audit writes with the platform's background-work primitive
 
 Use `upsertLaunchRegistration` whenever an LMS administrator gives you issuer, client ID, deployment ID, and OIDC endpoints. For self-service registration, use `LtiDynamicRegistration`. Custom admin UIs that manage stored client or deployment records directly should call `LTIStorage` methods instead of `LTITool`.
 
+Canvas administrators who need Developer Key **Paste JSON** can reuse the same
+dynamic registration config:
+
+```typescript
+import {
+  buildCanvasStaticRegistrationConfig,
+  type DynamicRegistrationConfig,
+} from '@longsightgroup/lti-tool';
+
+const dynamicRegistrationConfig: DynamicRegistrationConfig = {
+  // url, name, description, platforms...
+};
+
+const canvasJson = buildCanvasStaticRegistrationConfig({
+  config: dynamicRegistrationConfig,
+  selectedServices: ['ags', 'nrps', 'deep_linking'],
+});
+```
+
+Canvas static JSON requires `description` and `platforms.canvas.privacyLevel`.
+
 `LTIStorage.validateNonce` atomically claims nonces during launch verification. Configure
 nonce TTL on the storage adapter; core does not pre-store login nonces.
 

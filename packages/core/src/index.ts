@@ -140,6 +140,12 @@ export type {
 } from './services/ags.service.js';
 export { LtiDynamicRegistration } from './ltiDynamicRegistration.js';
 export {
+  buildCanvasStaticRegistrationConfig,
+  CanvasStaticRegistrationConfigError,
+  type BuildCanvasStaticRegistrationConfigInput,
+  type CanvasStaticRegistrationConfigErrorCode,
+} from './services/canvasStaticRegistrationConfig.js';
+export {
   projectDynamicRegistrationLaunchRegistration,
   upsertLaunchRegistration,
   type LtiLaunchRegistrationInput,

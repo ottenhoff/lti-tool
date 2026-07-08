@@ -313,43 +313,57 @@ Applications and tests can depend on the exported small interfaces:
 `LtiDeepLinkingClient`.
 
 Use `LtiDynamicRegistration` for administrator self-service registration.
-
 Dynamic registration can be customized per platform while keeping the same package
 entry point. Canvas, Brightspace, Moodle, and Sakai support placement configuration;
 final hooks can adjust the resolved messages or payload before the request is posted
 to the LMS.
 
 ```typescript
+import {
+  buildCanvasStaticRegistrationConfig,
+  type DynamicRegistrationConfig,
+} from '@longsightgroup/lti-tool';
+
+const dynamicRegistrationConfig: DynamicRegistrationConfig = {
+  url: 'https://tool.example.com',
+  name: 'Example Tool',
+  description: 'Example Tool course content.',
+  platforms: {
+    canvas: {
+      resourceLinkPlacements: ['course_navigation'],
+      deepLinkPlacements: ['editor_button', 'assignment_selection'],
+      privacyLevel: 'public',
+      toolId: 'example-tool',
+    },
+    brightspace: {
+      deepLinkPlacements: ['editor_button'],
+    },
+    moodle: {
+      deepLinkPlacements: ['editor_button', 'activity_chooser'],
+    },
+    sakai: {
+      deepLinkPlacements: ['editor_button'],
+    },
+  },
+  customizeMessages: (_context, messages) => messages,
+  customizePayload: (_context, payload) => ({
+    ...payload,
+    client_uri: 'https://tool.example.com/admin/lti',
+  }),
+};
+
 const ltiConfig = {
   // stateSecret, keyPair, storage...
-  dynamicRegistration: {
-    url: 'https://tool.example.com',
-    name: 'Example Tool',
-    platforms: {
-      canvas: {
-        resourceLinkPlacements: ['course_navigation'],
-        deepLinkPlacements: ['editor_button', 'assignment_selection'],
-        privacyLevel: 'public',
-        toolId: 'example-tool',
-      },
-      brightspace: {
-        deepLinkPlacements: ['editor_button'],
-      },
-      moodle: {
-        deepLinkPlacements: ['editor_button', 'activity_chooser'],
-      },
-      sakai: {
-        deepLinkPlacements: ['editor_button'],
-      },
-    },
-    customizeMessages: (_context, messages) => messages,
-    customizePayload: (_context, payload) => ({
-      ...payload,
-      client_uri: 'https://tool.example.com/admin/lti',
-    }),
-  },
+  dynamicRegistration: dynamicRegistrationConfig,
 };
+
+const canvasJson = buildCanvasStaticRegistrationConfig({
+  config: dynamicRegistrationConfig,
+  selectedServices: ['ags', 'nrps', 'deep_linking'],
+});
 ```
+
+Canvas static JSON requires `description` and `platforms.canvas.privacyLevel`.
 
 `appState` values passed to `initiateDynamicRegistration` or returned from Hono
 `getDynamicRegistrationAppState` are stored with the temporary registration session

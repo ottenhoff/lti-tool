@@ -1,4 +1,5 @@
 import type { DynamicRegistrationAppState } from '../schemas/lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
+import type { DynamicRegistrationSelectedService } from '../schemas/lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
 import type { LTIMessage } from '../schemas/lti13/dynamicRegistration/ltiMessages.schema.js';
 import type { OpenIDConfiguration } from '../schemas/lti13/dynamicRegistration/openIDConfiguration.schema.js';
 import type { ToolRegistrationPayload } from '../schemas/lti13/dynamicRegistration/toolRegistrationPayload.schema.js';
@@ -51,7 +52,7 @@ export interface DynamicRegistrationCustomizationContext {
   /** Platform OpenID configuration used for this registration attempt */
   openIdConfiguration: OpenIDConfiguration;
   /** LTI Advantage service keys selected by the administrator */
-  selectedServices: string[];
+  selectedServices: readonly DynamicRegistrationSelectedService[];
   /** Tool Deep Linking endpoint included in the registration payload */
   deepLinkingUri: string;
   /** Tool launch endpoint included in the registration payload */

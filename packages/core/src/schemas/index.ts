@@ -4,6 +4,17 @@ export {
   type LtiDeepLinkingSettings,
 } from './ltiDeepLinkingSettings.schema.js';
 export {
+  CanvasStaticRegistrationConfigSchema,
+  CanvasStaticRegistrationExtensionSchema,
+  CanvasStaticRegistrationExtensionSettingsSchema,
+  CanvasStaticRegistrationPlacementSchema,
+  CanvasStaticRegistrationPrivacyLevelSchema,
+  type CanvasStaticRegistrationConfig,
+  type CanvasStaticRegistrationExtension,
+  type CanvasStaticRegistrationPlacement,
+  type CanvasStaticRegistrationPrivacyLevel,
+} from './canvasStaticRegistration.schema.js';
+export {
   ContentItemSchema,
   type DeepLinkingCustomContentItem,
   type DeepLinkingContentItem,
@@ -20,6 +31,7 @@ export {
 export {
   DynamicRegistrationFormSchema,
   type DynamicRegistrationForm,
+  type DynamicRegistrationSelectedService,
 } from './lti13/dynamicRegistration/ltiDynamicRegistration.schema.js';
 export {
   LTIMessagesArraySchema,
