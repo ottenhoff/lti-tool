@@ -67,6 +67,23 @@ describe('LTI session schemas', () => {
     ).toThrow();
   });
 
+  it('rejects persisted Deep Linking settings with unknown keys', () => {
+    const session = createSession(sampleLaunchPayload());
+
+    expect(() =>
+      LTISessionSchema.parse({
+        ...session,
+        services: {
+          ...session.services,
+          deepLinking: {
+            ...session.services?.deepLinking,
+            acceptLineitem: true,
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
   it('accepts dynamic registration sessions', () => {
     const session = {
       openIdConfiguration: {

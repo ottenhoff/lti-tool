@@ -1,6 +1,6 @@
 import type { JWTPayload } from 'jose';
 
-import type { LtiDeepLinkingSettings } from './ltiDeepLinkingSettings.js';
+import type { LtiDeepLinkingSettings } from '../schemas/ltiDeepLinkingSettings.schema.js';
 
 /**
  * Represents an active LTI session containing user information, context data,

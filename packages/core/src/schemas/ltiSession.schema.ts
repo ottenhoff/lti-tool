@@ -3,6 +3,7 @@ import * as z from 'zod';
 import { DynamicRegistrationAppStateSchema } from './lti13/dynamicRegistration/dynamicRegistrationAppState.schema.js';
 import { openIDConfigurationSchema } from './lti13/dynamicRegistration/openIDConfiguration.schema.js';
 import { LTI13JwtPayloadSchema } from './lti13/lti13JwtPayload.schema.js';
+import { LtiDeepLinkingSettingsSchema } from './ltiDeepLinkingSettings.schema.js';
 
 export const LTISessionUserSchema = z.object({
   id: z.string().optional(),
@@ -49,20 +50,7 @@ export const LTISessionServicesSchema = z.object({
       versions: z.array(z.string()),
     })
     .optional(),
-  deepLinking: z
-    .object({
-      returnUrl: z.string(),
-      acceptTypes: z.array(z.string()),
-      acceptPresentationDocumentTargets: z.array(z.string()),
-      acceptMediaTypes: z.string().optional(),
-      acceptMultiple: z.boolean(),
-      acceptLineItem: z.boolean().optional(),
-      autoCreate: z.boolean(),
-      title: z.string().optional(),
-      text: z.string().optional(),
-      data: z.string().optional(),
-    })
-    .optional(),
+  deepLinking: LtiDeepLinkingSettingsSchema.optional(),
 });
 
 export const LTISessionSchema = z.object({

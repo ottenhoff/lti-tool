@@ -11,7 +11,6 @@ export type {
   PlatformDynamicRegistrationConfig,
 } from './ltiConfig.js';
 export type { LTIDeployment } from './ltiDeployment.js';
-export type { LtiDeepLinkingSettings } from './ltiDeepLinkingSettings.js';
 export type { LTIDynamicRegistrationSession } from './ltiDynamicRegistrationSession.js';
 export type { LTILaunchConfig } from './ltiLaunchConfig.js';
 export type { LtiLogFields, LtiLogger, LtiLogMethod } from './ltiLogger.js';

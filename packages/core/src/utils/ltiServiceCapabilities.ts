@@ -1,4 +1,5 @@
 import type { LTISession } from '../interfaces/ltiSession.js';
+import type { LtiDeepLinkingSettings } from '../schemas/ltiDeepLinkingSettings.schema.js';
 
 import { getLtiAgsService } from './ags.js';
 import { getLtiNrpsService } from './nrps.js';
@@ -25,35 +26,24 @@ export interface LtiNrpsServiceCapabilities {
   readonly versions: readonly string[];
 }
 
-/** Resolved Deep Linking capability metadata for an LTI session. */
-export interface LtiDeepLinkingServiceCapabilities {
-  /** True when the launch session includes Deep Linking settings. */
-  readonly available: boolean;
-  /** Deep Linking return URL, when provided by the platform. */
-  readonly returnUrl?: string;
-  /** Content item types accepted by the platform. */
+type ReadonlyLtiDeepLinkingSettings = Readonly<
+  Omit<LtiDeepLinkingSettings, 'acceptTypes' | 'acceptPresentationDocumentTargets'>
+> & {
   readonly acceptTypes: readonly string[];
-  /** Presentation targets accepted by the platform. */
   readonly acceptPresentationDocumentTargets: readonly string[];
-  /** Optional accepted media type expression advertised by the platform. */
-  readonly acceptMediaTypes?: string;
-  /** Whether the platform accepts multiple returned content items. */
-  readonly acceptMultiple: boolean;
-  /**
-   * Whether the platform supports line items in returned LTI Resource Link items.
-   *
-   * Absence means the platform did not advertise a line item policy.
-   */
-  readonly acceptLineItem?: boolean;
-  /** Whether the platform requests automatic item creation. */
-  readonly autoCreate: boolean;
-  /** Default title advertised for returned content items. */
-  readonly title?: string;
-  /** Default visible text advertised for returned content items. */
-  readonly text?: string;
-  /** Platform-specific opaque data that should be returned in the Deep Linking response. */
-  readonly data?: string;
-}
+};
+
+type UnavailableLtiDeepLinkingServiceCapabilities = Pick<
+  ReadonlyLtiDeepLinkingSettings,
+  'acceptTypes' | 'acceptPresentationDocumentTargets' | 'acceptMultiple' | 'autoCreate'
+> & {
+  readonly available: false;
+};
+
+/** Resolved Deep Linking capability metadata for an LTI session. */
+export type LtiDeepLinkingServiceCapabilities =
+  | ({ readonly available: true } & ReadonlyLtiDeepLinkingSettings)
+  | UnavailableLtiDeepLinkingServiceCapabilities;
 
 /** Policy-free snapshot of LTI Advantage service capabilities advertised in a launch session. */
 export interface LtiServiceCapabilities {
@@ -79,7 +69,9 @@ export function resolveLtiServiceCapabilities(
 ): LtiServiceCapabilities {
   const agsService = getLtiAgsService(session);
   const nrpsService = getLtiNrpsService(session);
-  const deepLinkingService = session.services?.deepLinking;
+  const deepLinkingService = resolveLtiDeepLinkingServiceCapabilities(
+    session.services?.deepLinking,
+  );
 
   return {
     ags: {
@@ -96,31 +88,28 @@ export function resolveLtiServiceCapabilities(
       versions: [...(nrpsService?.versions ?? [])],
     },
     deepLinking: {
-      available: deepLinkingService !== undefined,
-      ...(deepLinkingService?.returnUrl === undefined
-        ? {}
-        : { returnUrl: deepLinkingService.returnUrl }),
-      acceptTypes: [...(deepLinkingService?.acceptTypes ?? [])],
-      acceptPresentationDocumentTargets: [
-        ...(deepLinkingService?.acceptPresentationDocumentTargets ?? []),
-      ],
-      ...(deepLinkingService?.acceptMediaTypes === undefined
-        ? {}
-        : { acceptMediaTypes: deepLinkingService.acceptMediaTypes }),
-      acceptMultiple: deepLinkingService?.acceptMultiple ?? false,
-      ...(deepLinkingService?.acceptLineItem === undefined
-        ? {}
-        : { acceptLineItem: deepLinkingService.acceptLineItem }),
-      autoCreate: deepLinkingService?.autoCreate ?? false,
-      ...(deepLinkingService?.title === undefined
-        ? {}
-        : { title: deepLinkingService.title }),
-      ...(deepLinkingService?.text === undefined
-        ? {}
-        : { text: deepLinkingService.text }),
-      ...(deepLinkingService?.data === undefined
-        ? {}
-        : { data: deepLinkingService.data }),
+      ...deepLinkingService,
     },
+  };
+}
+
+function resolveLtiDeepLinkingServiceCapabilities(
+  settings: LtiDeepLinkingSettings | undefined,
+): LtiDeepLinkingServiceCapabilities {
+  if (settings === undefined) {
+    return {
+      available: false,
+      acceptTypes: [],
+      acceptPresentationDocumentTargets: [],
+      acceptMultiple: false,
+      autoCreate: false,
+    };
+  }
+
+  return {
+    available: true,
+    ...settings,
+    acceptTypes: [...settings.acceptTypes],
+    acceptPresentationDocumentTargets: [...settings.acceptPresentationDocumentTargets],
   };
 }

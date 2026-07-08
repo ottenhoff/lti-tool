@@ -1,5 +1,9 @@
 export { SessionIdSchema } from './common.schema.js';
 export {
+  LtiDeepLinkingSettingsSchema,
+  type LtiDeepLinkingSettings,
+} from './ltiDeepLinkingSettings.schema.js';
+export {
   ContentItemSchema,
   type DeepLinkingCustomContentItem,
   type DeepLinkingContentItem,

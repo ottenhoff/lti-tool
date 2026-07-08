@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isLtiDeepLinkingContentTypeAccepted,
+  LtiDeepLinkingSettingsSchema,
   parseLtiDeepLinkingSettings,
 } from '../src/index.js';
 
@@ -66,6 +67,19 @@ describe('Deep Linking settings helpers', () => {
 
   it('returns undefined when the claim is absent', () => {
     expect(parseLtiDeepLinkingSettings(undefined)).toBeUndefined();
+  });
+
+  it('rejects unknown normalized Deep Linking settings keys', () => {
+    expect(() =>
+      LtiDeepLinkingSettingsSchema.parse({
+        returnUrl: 'https://platform.example.com/deep_links',
+        acceptTypes: ['link'],
+        acceptPresentationDocumentTargets: ['iframe'],
+        acceptMultiple: false,
+        autoCreate: false,
+        acceptLineitem: true,
+      }),
+    ).toThrow();
   });
 
   it('rejects unknown Deep Linking settings keys', () => {
