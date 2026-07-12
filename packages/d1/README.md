@@ -13,10 +13,10 @@ npm install @longsightgroup/lti-tool drizzle-orm
 Apply the Drizzle migrations in `drizzle/` to your D1 database, then pass the
 binding to `D1Storage`.
 
-The initial tenant-scoped migration is for empty D1 LTI tables. A populated database
-cannot be assigned to a tenant safely without an application-owned mapping, so the
-migration fails before rebuilding tables. Start with empty LTI tables or perform an
-application-owned export and tenant assignment before applying it.
+The initial tenant-scoped migration is greenfield-only. It rebuilds the client and
+deployment tables and drops any rows in them. Do not apply it to a populated D1 LTI
+database. Export records and assign tenant IDs in application-owned migration work
+before creating a new tenant-scoped database.
 
 The Drizzle schema files are the source of truth for contributors. After schema
 changes, run `npm run db:generate:d1` and commit the generated migration SQL and

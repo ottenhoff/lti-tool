@@ -29,6 +29,7 @@ import {
   LTI13LaunchSchema,
   LTI13LoginSchema,
   SessionIdSchema,
+  parseStorageTenantId,
   VerifyLaunchParamsSchema,
   parseLtiLoginInitiation,
 } from '../src/schemas/index.js';
@@ -354,6 +355,19 @@ describe('Schema Validation Tests', () => {
     it('rejects empty session ID', () => {
       expect(() => SessionIdSchema.parse('')).toThrow();
     });
+  });
+
+  describe('parseStorageTenantId', () => {
+    it('accepts a valid storage tenant ID', () => {
+      expect(parseStorageTenantId('tenant_123')).toBe('tenant_123');
+    });
+
+    it.each(['', ' tenant', 'tenant ', 'tenant/id', 'a'.repeat(37)])(
+      'rejects invalid tenant ID %j',
+      (tenantId) => {
+        expect(() => parseStorageTenantId(tenantId)).toThrow();
+      },
+    );
   });
 
   describe('LTI13JwtPayloadSchema', () => {
