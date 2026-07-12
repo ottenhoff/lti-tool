@@ -1,6 +1,7 @@
 import {
   createNoopLogger,
   LtiStorageConflictError,
+  type StorageTenantId,
   type LTIClient,
   type LTIDeployment,
   type LTIDynamicRegistrationSession,
@@ -135,7 +136,7 @@ export type RelationalStorageConfig = {
   readonly schema: RelationalSchema;
   readonly dialect: RelationalStorageDialect;
   /** Binds this storage instance to one tenant for all LTI records. */
-  readonly tenantId: string;
+  readonly tenantId: StorageTenantId;
 };
 
 /**
@@ -422,7 +423,7 @@ export class RelationalStorage implements LTIStorage {
     const row = toSessionDataRow(session);
     await this.executeMutation(
       this.db.insert(this.schema.sessionsTable).values(
-        this.tenant.insertValues(this.schema.sessionsTable, {
+        this.tenant.insertValues({
           id: row.id,
           data: row.data,
           expiresAt,
@@ -574,15 +575,18 @@ export class RelationalStorage implements LTIStorage {
         deploymentId: deploymentsTable.deploymentId,
       })
       .from(clientsTable)
-      .innerJoin(deploymentsTable, eq(deploymentsTable.clientId, clientsTable.id))
+      .innerJoin(
+        deploymentsTable,
+        and(
+          eq(deploymentsTable.tenantId, clientsTable.tenantId),
+          eq(deploymentsTable.clientId, clientsTable.id),
+        )!,
+      )
       .where(
         and(
           this.scoped(clientsTable, eq(clientsTable.iss, iss)),
           eq(clientsTable.clientId, clientId),
-          this.scoped(
-            deploymentsTable,
-            eq(deploymentsTable.deploymentId, platformDeploymentId),
-          ),
+          eq(deploymentsTable.deploymentId, platformDeploymentId),
         ),
       )
       .limit(1);
@@ -596,7 +600,7 @@ export class RelationalStorage implements LTIStorage {
   ): Promise<string> {
     await this.executeMutation(
       this.db.insert(this.schema.clientsTable).values(
-        this.tenant.insertValues(this.schema.clientsTable, {
+        this.tenant.insertValues({
           id: clientId,
           ...client,
         }),
@@ -612,7 +616,7 @@ export class RelationalStorage implements LTIStorage {
   ): Promise<string> {
     await this.executeMutation(
       this.db.insert(this.schema.deploymentsTable).values(
-        this.tenant.insertValues(this.schema.deploymentsTable, {
+        this.tenant.insertValues({
           id: deploymentInternalId,
           clientId,
           ...toDeploymentInsertRow(deployment),

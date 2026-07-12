@@ -1,4 +1,8 @@
-import { isServerlessEnvironment, type LtiLogger } from '@longsightgroup/lti-tool';
+import {
+  isServerlessEnvironment,
+  parseStorageTenantId,
+  type LtiLogger,
+} from '@longsightgroup/lti-tool';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
@@ -21,14 +25,14 @@ export class PostgresStorage extends RelationalStorage {
   private readonly sql: postgres.Sql;
 
   constructor(config: PostgresStorageConfig) {
+    const tenantId = parseStorageTenantId(config.tenantId);
     const logger = resolveStorageLogger(config.logger);
     const connectionOptions = resolveConnectionOptions(config, logger);
-    const sql =
-      config.sql ??
-      postgres(config.connectionUrl, {
-        max: connectionOptions.max,
-        idle_timeout: connectionOptions.idleTimeout,
-      });
+    const sql = postgres(config.connectionUrl, {
+      connection: { 'app.tenant_id': tenantId },
+      max: connectionOptions.max,
+      idle_timeout: connectionOptions.idleTimeout,
+    });
     const db = drizzle(sql, { schema });
 
     super({
@@ -40,9 +44,9 @@ export class PostgresStorage extends RelationalStorage {
         db,
         schema,
         sessionTtlSeconds: DEFAULT_SESSION_TTL_SECONDS,
-        tenantId: config.tenantId,
+        tenantId,
       }),
-      tenantId: config.tenantId,
+      tenantId,
     });
 
     this.adapterLogger = logger;

@@ -74,7 +74,7 @@ app.get('/protected/content', (c) => {
 
 ### createLtiRoutes(options)
 
-Mounts required LTI protocol routes (`/jwks`, `/login`, `/launch`) on a Hono sub-app. Pass the same `LTITool` instance you use elsewhere in your app. Optionally pass a `logger` for route-level error logging; otherwise routes use a noop logger.
+Mounts required LTI protocol routes (`/jwks`, `/login`, `/launch`) on a Hono sub-app. Pass the tenant-bound `LTITool` selected by trusted application routing. Do not select tenants from request-controlled values. Optionally pass a `logger` for route-level error logging; otherwise routes use a noop logger.
 
 ```typescript
 import { createLtiRoutes } from '@longsightgroup/lti-tool/hono';
@@ -164,7 +164,7 @@ const optionalRoutes = createLtiOptionalRouteDeps({
   dynamicRegistration,
   logger,
   getDynamicRegistrationAppState: ({ hono }) => ({
-    tenantId: hono.req.query('tenantId') ?? 'default',
+    tenantId: yourTenantIdFromTrustedHost(hono.req.header('host')),
   }),
   onRegistrationComplete: async ({ client, deployment, appState }) => {
     await saveTenantRegistration({ client, deployment, appState });

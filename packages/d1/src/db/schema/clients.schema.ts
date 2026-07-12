@@ -1,4 +1,10 @@
-import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 import {
   LTI_COLUMNS,
@@ -10,7 +16,7 @@ import {
 export const clientsTable = sqliteTable(
   LTI_TABLES.clients,
   {
-    id: text(LTI_COLUMNS.id).primaryKey(),
+    id: text(LTI_COLUMNS.id).notNull(),
     tenantId: text(LTI_COLUMNS.tenantId).notNull(),
     name: text(LTI_COLUMNS.platformName).notNull(),
     iss: text(LTI_COLUMNS.iss).notNull(),
@@ -20,6 +26,7 @@ export const clientsTable = sqliteTable(
     jwksUrl: text(LTI_COLUMNS.jwksUrl).notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.tenantId, table.id] }),
     index(LTI_INDEXES.clientsIssuerClient).on(table.tenantId, table.clientId, table.iss),
     uniqueIndex(LTI_UNIQUES.clientsIssClientId).on(
       table.tenantId,

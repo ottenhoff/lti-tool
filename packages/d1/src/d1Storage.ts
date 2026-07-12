@@ -1,3 +1,4 @@
+import { parseStorageTenantId } from '@longsightgroup/lti-tool';
 import { drizzle } from 'drizzle-orm/d1';
 
 import {
@@ -16,6 +17,7 @@ import type { D1StorageConfig } from './interfaces/d1StorageConfig.js';
  */
 export class D1Storage extends RelationalStorage {
   constructor(config: D1StorageConfig) {
+    const tenantId = parseStorageTenantId(config.tenantId);
     const logger = resolveStorageLogger(config.logger);
     const db = drizzle(config.database, { schema });
 
@@ -28,9 +30,9 @@ export class D1Storage extends RelationalStorage {
         db,
         schema,
         sessionTtlSeconds: DEFAULT_SESSION_TTL_SECONDS,
-        tenantId: config.tenantId,
+        tenantId,
       }),
-      tenantId: config.tenantId,
+      tenantId,
     });
   }
 }

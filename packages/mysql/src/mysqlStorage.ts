@@ -1,4 +1,8 @@
-import { isServerlessEnvironment, type LtiLogger } from '@longsightgroup/lti-tool';
+import {
+  isServerlessEnvironment,
+  parseStorageTenantId,
+  type LtiLogger,
+} from '@longsightgroup/lti-tool';
 import { drizzle } from 'drizzle-orm/mysql2';
 import mysql from 'mysql2/promise';
 
@@ -21,6 +25,7 @@ export class MySqlStorage extends RelationalStorage {
   private readonly pool: mysql.Pool;
 
   constructor(config: MySqlStorageConfig) {
+    const tenantId = parseStorageTenantId(config.tenantId);
     const logger = resolveStorageLogger(config.logger);
     const connectionOptions = resolveConnectionOptions(config, logger);
     const pool =
@@ -41,9 +46,9 @@ export class MySqlStorage extends RelationalStorage {
         db,
         schema,
         sessionTtlSeconds: DEFAULT_SESSION_TTL_SECONDS,
-        tenantId: config.tenantId,
+        tenantId,
       }),
-      tenantId: config.tenantId,
+      tenantId,
     });
 
     this.adapterLogger = logger;

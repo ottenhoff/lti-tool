@@ -1,5 +1,13 @@
 ALTER TABLE `lti_clients` ADD `tenant_id` varchar(36) NOT NULL;--> statement-breakpoint
 ALTER TABLE `lti_deployments` ADD `tenant_id` varchar(36) NOT NULL;--> statement-breakpoint
+ALTER TABLE `lti_deployments` DROP FOREIGN KEY `lti_deployments_client_id_lti_clients_id_fk`;--> statement-breakpoint
+ALTER TABLE `lti_clients` DROP PRIMARY KEY;--> statement-breakpoint
+ALTER TABLE `lti_clients` ADD PRIMARY KEY (`tenant_id`, `id`);--> statement-breakpoint
+ALTER TABLE `lti_deployments` DROP PRIMARY KEY;--> statement-breakpoint
+ALTER TABLE `lti_deployments` ADD PRIMARY KEY (`tenant_id`, `id`);--> statement-breakpoint
+ALTER TABLE `lti_deployments` DROP INDEX `lti_deployments_client_deployment_uniq`;--> statement-breakpoint
+ALTER TABLE `lti_deployments` ADD CONSTRAINT `lti_deployments_client_deployment_uniq` UNIQUE(`tenant_id`, `client_id`, `deployment_id`);--> statement-breakpoint
+ALTER TABLE `lti_deployments` ADD CONSTRAINT `lti_deployments_tenant_client_fk` FOREIGN KEY (`tenant_id`, `client_id`) REFERENCES `lti_clients`(`tenant_id`, `id`) ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE `lti_registration_sessions` ADD `tenant_id` varchar(36) NOT NULL;--> statement-breakpoint
 ALTER TABLE `lti_sessions` ADD `tenant_id` varchar(36) NOT NULL;--> statement-breakpoint
 ALTER TABLE `lti_registration_sessions` DROP PRIMARY KEY;--> statement-breakpoint

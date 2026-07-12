@@ -15,6 +15,7 @@ import {
   createNoopLogger,
   parsePersistedLtiDynamicRegistrationSessionValue,
   parsePersistedLtiSessionValue,
+  parseStorageTenantId,
   type LTIClient,
   type LTIDeployment,
   type LTIDynamicRegistrationSession,
@@ -22,6 +23,7 @@ import {
   type LtiLogger,
   type LTISession,
   type LTIStorage,
+  type StorageTenantId,
 } from '@longsightgroup/lti-tool';
 
 import {
@@ -47,7 +49,7 @@ export class DynamoDbStorage implements LTIStorage {
   private launchConfigTable: string;
   private ddbClient: DynamoDBClient;
   private nonceExpirationSeconds: number;
-  private tenantId: string;
+  private tenantId: StorageTenantId;
 
   /**
    * Creates a new DynamoDB storage instance.
@@ -60,7 +62,7 @@ export class DynamoDbStorage implements LTIStorage {
     this.dataPlaneTable = config.dataPlaneTable;
     this.launchConfigTable = config.launchConfigTable;
     this.nonceExpirationSeconds = config.nonceExpirationSeconds ?? 600;
-    this.tenantId = config.tenantId;
+    this.tenantId = parseStorageTenantId(config.tenantId);
     this.ddbClient = new DynamoDBClient();
   }
 

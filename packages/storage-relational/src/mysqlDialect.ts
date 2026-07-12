@@ -1,4 +1,7 @@
-import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
+import type {
+  LTIDynamicRegistrationSession,
+  StorageTenantId,
+} from '@longsightgroup/lti-tool';
 import { lte } from 'drizzle-orm';
 import type { MySqlColumn, MySqlTable } from 'drizzle-orm/mysql-core';
 import type { MySql2Database } from 'drizzle-orm/mysql2';
@@ -37,7 +40,7 @@ export function createMySqlDialect<TSchema extends MySqlRelationalSchema>(option
   readonly schema: TSchema;
   readonly sessionTtlSeconds: number;
   readonly nonceTtlSeconds?: number;
-  readonly tenantId: string;
+  readonly tenantId: StorageTenantId;
 }): RelationalStorageDialect {
   const {
     db,
@@ -50,7 +53,7 @@ export function createMySqlDialect<TSchema extends MySqlRelationalSchema>(option
 
   async function claimNonce(nonce: string, expiresAt: number): Promise<boolean> {
     const result = await db.insert(schema.noncesTable).ignore().values(
-      tenant.insertValues(schema.noncesTable, {
+      tenant.insertValues({
         nonce,
         expiresAt,
       }),
@@ -65,7 +68,7 @@ export function createMySqlDialect<TSchema extends MySqlRelationalSchema>(option
     await db
       .insert(schema.registrationSessionsTable)
       .values(
-        tenant.insertValues(schema.registrationSessionsTable, {
+        tenant.insertValues({
           id: sessionId,
           data: session,
           expiresAt: session.expiresAt,

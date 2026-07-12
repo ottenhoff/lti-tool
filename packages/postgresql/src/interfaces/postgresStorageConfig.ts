@@ -1,5 +1,4 @@
 import type { LtiLogger } from '@longsightgroup/lti-tool';
-import type postgres from 'postgres';
 
 export interface PostgresStorageConfig {
   /** Required application tenant boundary for all LTI records. */
@@ -10,10 +9,6 @@ export interface PostgresStorageConfig {
    * Compatible with DATABASE_URL environment variable used by most ORMs
    */
   connectionUrl: string;
-  /**
-   * Optional pre-created postgres.js client (used by integration test harnesses).
-   */
-  sql?: postgres.Sql;
   /**
    * Optional postgres.js connection options
    */

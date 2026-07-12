@@ -28,11 +28,11 @@ export class PostgresStorageHarness implements StorageHarness<PostgresStorage> {
       'postgresql://lti_user:lti_password@localhost:5432/lti_test',
     tenantId = 'test-tenant',
   ): PostgresStorageHarness {
-    const sql = postgres(connectionUrl);
+    const sql = postgres(connectionUrl, { connection: { 'app.tenant_id': tenantId } });
     const seedWriter = createPostgresSeedWriter(sql, tenantId);
     return new PostgresStorageHarness(
       sql,
-      new PostgresStorage({ connectionUrl, sql, tenantId }),
+      new PostgresStorage({ connectionUrl, tenantId }),
       tenantId,
       createRelationalReset(seedWriter),
     );
@@ -59,6 +59,7 @@ export class PostgresStorageHarness implements StorageHarness<PostgresStorage> {
 
   async dispose(): Promise<void> {
     await this.storage.close();
+    await this.sql.end();
   }
 
   private createSeedWriter(): RelationalSeedWriter {

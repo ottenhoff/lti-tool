@@ -1,3 +1,4 @@
+import type { StorageTenantId } from '@longsightgroup/lti-tool';
 import { and, eq, type AnyColumn, type SQL } from 'drizzle-orm';
 
 export type TenantScopedTable = {
@@ -5,16 +6,13 @@ export type TenantScopedTable = {
 };
 
 export type TenantScope = {
-  readonly tenantId: string;
+  readonly tenantId: StorageTenantId;
   condition(table: TenantScopedTable): SQL;
   withTenant(table: TenantScopedTable, condition: SQL): SQL;
-  insertValues(
-    table: TenantScopedTable,
-    values: Record<string, unknown>,
-  ): Record<string, unknown>;
+  insertValues(values: Record<string, unknown>): Record<string, unknown>;
 };
 
-export function createTenantScope(tenantId: string): TenantScope {
+export function createTenantScope(tenantId: StorageTenantId): TenantScope {
   return {
     tenantId,
     condition(table: TenantScopedTable): SQL {
@@ -23,7 +21,7 @@ export function createTenantScope(tenantId: string): TenantScope {
     withTenant(table: TenantScopedTable, condition: SQL): SQL {
       return and(eq(table.tenantId, tenantId), condition)!;
     },
-    insertValues(table: TenantScopedTable, values: Record<string, unknown>) {
+    insertValues(values: Record<string, unknown>) {
       return { ...values, tenantId };
     },
   };

@@ -1,4 +1,11 @@
-import { index, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import {
+  index,
+  pgTable,
+  primaryKey,
+  text,
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 import {
   LTI_CLIENT_ID_LENGTH,
@@ -14,7 +21,7 @@ import {
 export const clientsTable = pgTable(
   LTI_TABLES.clients,
   {
-    id: varchar(LTI_COLUMNS.id, { length: LTI_ID_LENGTH }).primaryKey(),
+    id: varchar(LTI_COLUMNS.id, { length: LTI_ID_LENGTH }).notNull(),
     tenantId: varchar(LTI_COLUMNS.tenantId, { length: LTI_ID_LENGTH }).notNull(),
     name: varchar(LTI_COLUMNS.platformName, { length: LTI_NAME_LENGTH }).notNull(),
     iss: varchar(LTI_COLUMNS.iss, { length: LTI_ISS_LENGTH }).notNull(),
@@ -24,6 +31,7 @@ export const clientsTable = pgTable(
     jwksUrl: text(LTI_COLUMNS.jwksUrl).notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.tenantId, table.id] }),
     index(LTI_INDEXES.clientsIssuerClient).on(table.tenantId, table.clientId, table.iss),
     uniqueIndex(LTI_UNIQUES.clientsIssClientId).on(
       table.tenantId,

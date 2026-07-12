@@ -66,6 +66,11 @@ export {
   VerifyLaunchParamsSchema,
 } from './lti13/lti13Launch.schema.js';
 export {
+  parseStorageTenantId,
+  StorageTenantIdSchema,
+  type StorageTenantId,
+} from './storageTenantId.schema.js';
+export {
   HandleLoginParamsSchema,
   LTI13LoginInitiationSchema,
   type LTI13LoginInitiation,

@@ -1,4 +1,7 @@
-import type { LTIDynamicRegistrationSession } from '@longsightgroup/lti-tool';
+import type {
+  LTIDynamicRegistrationSession,
+  StorageTenantId,
+} from '@longsightgroup/lti-tool';
 import { lte } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -37,7 +40,7 @@ export function createPostgresDialect<TSchema extends PostgresRelationalSchema>(
   readonly schema: TSchema;
   readonly sessionTtlSeconds: number;
   readonly nonceTtlSeconds?: number;
-  readonly tenantId: string;
+  readonly tenantId: StorageTenantId;
 }): RelationalStorageDialect {
   const {
     db,
@@ -52,7 +55,7 @@ export function createPostgresDialect<TSchema extends PostgresRelationalSchema>(
     const rows = await db
       .insert(schema.noncesTable)
       .values(
-        tenant.insertValues(schema.noncesTable, {
+        tenant.insertValues({
           nonce,
           expiresAt,
         }),
@@ -70,7 +73,7 @@ export function createPostgresDialect<TSchema extends PostgresRelationalSchema>(
     await db
       .insert(schema.registrationSessionsTable)
       .values(
-        tenant.insertValues(schema.registrationSessionsTable, {
+        tenant.insertValues({
           id: sessionId,
           data: session,
           expiresAt: session.expiresAt,

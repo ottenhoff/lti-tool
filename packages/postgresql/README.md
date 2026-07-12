@@ -54,6 +54,12 @@ changes, run `npm run db:generate:postgresql` and commit the generated migration
 SQL and metadata. Run `npm run db:check:postgresql` before finishing migration
 changes.
 
+### Row-Level Security
+
+PostgreSQL migrations enable and force row-level security for every LTI table. `PostgresStorage` supplies its validated `tenantId` as the `app.tenant_id` connection setting, so pooled connections remain bound to the storage instance's tenant.
+
+Run migrations with a dedicated migration role. Production applications should connect with a separate non-superuser role that has table privileges but does not own the LTI tables; superusers and roles with `BYPASSRLS` are not tenant-isolated by PostgreSQL.
+
 ### PostgresStorageConfig
 
 - **connectionUrl** (required): PostgreSQL connection URL
